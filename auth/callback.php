@@ -94,7 +94,8 @@
         $userInsertionId = $dbObject->insert($query, $params, 'User contact created from Microsoft OAuth');
 
 
-        $dummyPassword = "TempPass123!";   // Dummy password
+        // random password for user creation
+        $dummyPassword = bin2hex(random_bytes(8)); // 16 characters
         $query = 'INSERT INTO tbl_users(user_name, email, password, user_status, contact_id, status, entity_id, createdBy)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
         $hashedPassword = password_hash($dummyPassword, PASSWORD_BCRYPT);

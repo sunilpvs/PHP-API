@@ -1,0 +1,59 @@
+# End points 
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteRule ^api/admin/cities$ api/admin/city-api.php [L]
+    RewriteRule ^api/admin/countries$ api/admin/country-api.php [L]
+    RewriteRule ^api/admin/status$ api/admin/status-api.php [L]
+    RewriteRule ^api/admin/department$ api/admin/department-api.php [L]
+    RewriteRule ^api/admin/designation$ api/admin/designation-api.php [L]
+    RewriteRule ^api/admin/contacttype$ api/admin/contacttype-api.php [L]
+    RewriteRule ^api/admin/costctype$ api/admin/costcentertype-api.php [L]
+    RewriteRule ^api/admin/costcenter$ api/admin/costcenter-api.php [L]
+    RewriteRule ^api/admin/states$ api/admin/state-api.php [L]
+    RewriteRule ^api/admin/entity$ api/admin/entity-api.php [L]
+    RewriteRule ^api/admin/access-request$ api/admin/access-req-api.php [L]
+    RewriteRule ^api/user/me$ api/user/user-api.php [L]
+    RewriteRule ^api/user/role$ api/user/user-role-api.php [L]
+
+
+    RewriteRule ^api/logs/activity$ api/logs/activity-log-api.php [L]
+
+
+
+    RewriteRule ^api/vms/vendor-initiate$ api/vms/rfq-api.php [L] 
+    RewriteRule ^api/vms/counterparty$ api/vms/counter-party-api.php [L]          # counter party details
+    RewriteRule ^api/vms/msme$ api/vms/msme-api.php [L]                  # msme + branch details
+    RewriteRule ^api/vms/gst(/.*)?$ api/vms/gst-api.php [L]              # goods and services + particulars + nature of business
+    RewriteRule ^api/vms/bank-info$ api/vms/bank-api.php [L]                  # bank details + compliance details
+    RewriteRule ^api/vms/documents$ api/vms/documents-api.php [L]             # document details
+    RewriteRule ^api/vms/declarations$ api/vms/declarations-api.php [L]          # declarations
+    RewriteRule ^api/vms/rfq-reference$ api/vms/rfq-reference.php [L]                 # terms and conditions
+    RewriteRule ^api/vms/comments$ api/vms/comments-api.php [L]                 # comments
+    RewriteRule ^api/vms/rfq-review$ api/vms/rfq-review-api.php [L]  
+
+    # Redirect all requests to index.php (REST API routing)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Set CORS headers
+<IfModule mod_headers.c>
+    SetEnvIf Origin "^(Origins you want to allow separated by | )$" ORIGIN=$0
+        
+    Header always set Access-Control-Allow-Origin "%{ORIGIN}e" env=ORIGIN
+    Header always set Access-Control-Allow-Credentials "true"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
+# Handle preflight OPTIONS requests
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Disable directory listing
+Options -Indexes
+
+# Environment Setup (development/production)
+SetEnv APP_ENV development 

@@ -6,10 +6,12 @@ require_once(__DIR__."/../../vendor/autoload.php");
 class JWTHandler {
     private $secretKey; 
     private $algorithm;
+    private $config;
 
     function __construct() 
     {
-        $this->secretKey = "pvs_secret_key";
+        $this->config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
+        $this->secretKey = $this->config['jwt_secret'];
         $this->algorithm = "HS256";
     }
     // Generate access token (Short-lived)

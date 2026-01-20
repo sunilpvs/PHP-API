@@ -1,0 +1,47 @@
+[generic]
+ENVIRONMENT = "Test"
+APP_NAME    = "PVSAPI"
+DEBUG_MODE  = "false"
+
+[database]
+host        = "host address"
+db_name     = "database name"
+db_user     = "database user"
+db_password = "database password"
+ 
+[application]
+logo        = "logo-pvs.png"
+app_email   = "app email address"
+app_url     = "app url"
+app_contact = "app contact number"
+app_rights  = "2026 PVS Consultancy Services. All Right Reserved."
+vendor_login_url = "vendor login url"
+admin_portal_url   = "admin portal url"
+vms_portal_url     = "vms portal url"
+
+
+# token settings
+[expiration times in minutes]
+access_token  = "15"
+refresh_token = "60 * 24 * 7"
+
+
+
+[jwt secret key]
+jwt_secret = "jwt secret key value"
+
+[m365]  
+tenant_id               = 'common'
+clientSecret            = 'client secret value'
+clientId                = 'client id'
+redirectUri             = 'redirect uri'
+urlAuthorize            = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
+urlAccessToken          = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+urlResourceOwnerDetails = ''
+scopes                  = 'User.ReadBasic.All User.Read.All Directory.Read.All IdentityProvider.Read.All openid profile email Contacts.Read'
+
+## cookie related configurations
+[session]
+session.cookie_secure = true
+session.cookie_httponly = true
+session.use_strict_mode = 1

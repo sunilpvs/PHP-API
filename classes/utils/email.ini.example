@@ -1,0 +1,9 @@
+[GraphAutoMailer]
+tenantId     = "tenantId"
+clientId     = "clientId"
+clientSecret = "clientSecret"
+Scope        = "https://graph.microsoft.com/.default"
+LogoUrl      = "LogoUrl"
+BannerUrl    = "BannerUrl"
+fromAddress  = "fromAddress"
+ByName       = "ByName"
