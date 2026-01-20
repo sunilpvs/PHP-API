@@ -1,0 +1,72 @@
+<?php
+
+// for cron job to expire RFQs past their expiry date
+require_once __DIR__ . '/../../vms/Rfq.php';
+require_once __DIR__ . '/../../../classes/Logger.php';
+require_once __DIR__ . '/../GraphAutoMailer.php';
+
+
+try {
+    $rfqObj = new Rfq();
+    $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
+    $debugMode = isset($config['DEBUG_MODE']) && in_array(strtolower($config['DEBUG_MODE']), ['1', 'true'], true);
+
+    $logger = new Logger(false, $_SERVER['DOCUMENT_ROOT'] . '/logs');
+   
+    // Loop through each notification interval
+    $daysArray = [60, 45, 30, 15, 7, 3, 1];
+    
+    foreach ($daysArray as $days) {
+        $rfqsToNotify = $rfqObj->getRfqsByDays($days); // get RFQs expiring in $days
+
+        if (empty($rfqsToNotify)) {
+            $logger->log("No RFQs found expiring in $days days", 'INFO', 'cron');
+            continue;
+        }
+
+        foreach ($rfqsToNotify as $rfq) {
+            $rfqId = $rfq['id'];
+            $vendorId = $rfq['vendor_id'];
+            $expiryDate = $rfq['expiry_date'] ?? date('Y-m-d', strtotime("+$days days"));
+
+            // get vendor details
+            $activeRfq = $rfqObj->getActiveRfqForVendor($vendorId, 'cron');
+            if ($activeRfq) {
+                $vendorEmail = $activeRfq['email'];
+                $vendorCode = $activeRfq['vendor_code'];
+
+                $vmsAdminEmails = $rfqObj->getVmsAdminEmails('cron', 'system');
+
+                $mailer = new AutoMail();
+                $keyValueData = [
+                    "Message" => "Your Vendor ID is set to expire in " . $days . " days on " . $expiryDate . ". Please take necessary actions to renew your Vendor ID.",
+                    "Reference ID" => $rfq['reference_id'],
+                ];
+
+                // Prepare email data and send email using the mailer
+                $emailSent = $mailer->sendInfoEmail(
+                    subject: 'Vendor Expiry Notification - Reference ID: ' . $rfq['reference_id'],
+                    greetings: 'Dear Vendor,',
+                    name: 'Shrichandra Group Team',
+                    keyValueArray: $keyValueData,
+                    to: [$vendorEmail],
+                    bcc: $vmsAdminEmails,
+                );
+
+                if ($emailSent) {
+                    // Log success
+                    $logger->log("Expiry notification sent for RFQ ID $rfqId to $vendorEmail (expires in $days days)", 'INFO', 'cron');
+                } else {
+                    // Log failure
+                    $logger->log("Failed to send expiry notification for RFQ ID $rfqId to $vendorEmail", 'ERROR', 'cron');
+                }
+            } else {
+                $logger->log("No active RFQ found for vendor ID $vendorId", 'WARNING', 'cron');
+            }
+        }
+    }
+}
+    
+ catch (Exception $e) {
+    $logger->log("Error in VmsNotifications Cron: " . $e->getMessage(), 'ERROR', 'cron');
+}

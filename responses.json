@@ -1,0 +1,231 @@
+// https://{{apiBaseUrl}}/api/v1.0/documenttypes
+
+
+{
+    "result": [
+        {
+            "id": 1,
+            "invoiceTypeCode": "01",
+            "name": "Invoice",
+            "description": "Invoice",
+            "activeFrom": "2024-05-02T10:34:11.15Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 1,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.2Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 2,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.29Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "invoiceTypeCode": "02",
+            "name": "Credit Note",
+            "description": "Credit Note",
+            "activeFrom": "2024-05-02T10:34:11.15Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 3,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.2033333Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 4,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.3133333Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "invoiceTypeCode": "03",
+            "name": "Debit Note",
+            "description": "Debit Note",
+            "activeFrom": "2024-05-02T10:34:11.1533333Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 5,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.1633333Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 6,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.3133333Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "invoiceTypeCode": "04",
+            "name": "Refund Note",
+            "description": "Refund Note",
+            "activeFrom": "2024-05-02T10:34:11.1566667Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 7,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.1666667Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 8,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.3266667Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "invoiceTypeCode": "11",
+            "name": "Self-billed Invoice",
+            "description": "Self-billed Invoice",
+            "activeFrom": "2024-05-02T10:34:11.16Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 9,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.17Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 10,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.33Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 6,
+            "invoiceTypeCode": "12",
+            "name": "Self-billed Credit Note",
+            "description": "Self-billed Credit Note",
+            "activeFrom": "2024-05-02T10:34:11.16Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 11,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.17Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 12,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.35Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 7,
+            "invoiceTypeCode": "13",
+            "name": "Self-billed Debit Note",
+            "description": "Self-billed Debit Note",
+            "activeFrom": "2024-05-02T10:34:11.16Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 13,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.18Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 14,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.35Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        },
+        {
+            "id": 8,
+            "invoiceTypeCode": "14",
+            "name": "Self-billed Refund Note",
+            "description": "Self-billed Refund Note",
+            "activeFrom": "2024-05-02T10:34:11.1633333Z",
+            "activeTo": null,
+            "documentTypeVersions": [
+                {
+                    "id": 15,
+                    "name": "Version 1",
+                    "description": "Version 1",
+                    "activeFrom": "2024-04-26T17:47:49.18Z",
+                    "activeTo": null,
+                    "versionNumber": "1.0",
+                    "status": "Published"
+                },
+                {
+                    "id": 16,
+                    "name": "Version 2",
+                    "description": "Version 2",
+                    "activeFrom": "2024-06-21T15:13:17.3633333Z",
+                    "activeTo": null,
+                    "versionNumber": "1.1",
+                    "status": "Published"
+                }
+            ]
+        }
+    ]
+}
