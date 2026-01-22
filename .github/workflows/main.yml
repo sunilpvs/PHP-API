@@ -20,7 +20,7 @@ jobs:
 
             - name: Create Deployment Marker
               run: |
-                    echo "${GITHUB_SHA}" > build/.deploy-marker
+                    echo "${GITHUB_SHA}" > .deploy-marker
 
             - name: Check Directory and Create if not Exists
               uses: appleboy/ssh-action@v0.1.7
