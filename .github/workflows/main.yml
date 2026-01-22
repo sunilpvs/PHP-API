@@ -11,19 +11,34 @@ jobs:
         runs-on: ubuntu-latest
         if: |
             !contains(github.event.head_commit.message, '[skip ci]')
-        
+
         environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'test' }}
 
         steps:
             - name: Checkout Code
               uses: actions/checkout@v3
 
+            - name: Check Directory and Create if not Exists
+              uses: appleboy/ssh-action@v0.1.7
+              with:
+                  host: ${{ secrets.CPANEL_HOST }}
+                  username: ${{ secrets.CPANEL_USER }}
+                  key: ${{ secrets.CPANEL_SSH_KEY }}
+                  script: |
+                      DEPLOY_PATH="/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
+                      if [ ! -d "$DEPLOY_PATH" ]; then
+                          mkdir -p "$DEPLOY_PATH"
+                          echo "Directory Created: $DEPLOY_PATH"
+                      else
+                          echo "Directory already Exists in $DEPLOY_PATH"
+                      fi
+
             - name: Upload Code to cPanel
               uses: appleboy/scp-action@v0.1.7
               with:
-                    host: ${{ secrets.CPANEL_HOST }}
-                    username: ${{ secrets.CPANEL_USER }}
-                    key: ${{ secrets.CPANEL_SSH_KEY }}
-                    source: "**"
-                    target: "/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
-                    rm: false
+                  host: ${{ secrets.CPANEL_HOST }}
+                  username: ${{ secrets.CPANEL_USER }}
+                  key: ${{ secrets.CPANEL_SSH_KEY }}
+                  source: "**"
+                  target: "/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
+                  rm: false
