@@ -18,6 +18,10 @@ jobs:
             - name: Checkout Code
               uses: actions/checkout@v3
 
+            - name: Create Deployment Marker
+              run: |
+                    echo "${GITHUB_SHA}" > build/.deploy-marker
+
             - name: Check Directory and Create if not Exists
               uses: appleboy/ssh-action@v0.1.7
               with:
@@ -42,3 +46,19 @@ jobs:
                   source: "**"
                   target: "/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
                   rm: false
+
+            - name: Check Deployment
+              uses: appleboy/ssh-action@v0.1.7
+              with:
+                  host: ${{ secrets.CPANEL_HOST }}
+                  username: ${{ secrets.CPANEL_USER }}
+                  key: ${{ secrets.CPANEL_SSH_KEY }}
+                  script: |
+                        DEPLOY_PATH="/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
+                        MARKER_FILE="$DEPLOY_PATH/build/.deploy-marker"
+                        if [ -f "$MARKER_FILE" ] && grep -1 "${GITHUB_SHA}" "$MARKER_FILE"; then
+                            echo "Deployment Successful"
+                        else
+                            echo "Deployment Failed
+                            exit 1
+                        fi
