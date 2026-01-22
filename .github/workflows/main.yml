@@ -1,0 +1,29 @@
+name: Deploy API to cPanel
+
+on:
+    push:
+        branches:
+            - main
+            - test
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        if: |
+            !contains(github.event.head_commit.message, '[skip ci]')
+        
+        environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'test' }}
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v3
+
+            - name: Upload Code to cPanel
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                    host: ${{ secrets.CPANEL_HOST }}
+                    username: ${{ secrets.CPANEL_USER }}
+                    key: ${{ secrets.CPANEL_SSH_KEY }}
+                    source: "**"
+                    target: "/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
+                    rm: false
