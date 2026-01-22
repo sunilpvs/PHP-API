@@ -55,10 +55,10 @@ jobs:
                   key: ${{ secrets.CPANEL_SSH_KEY }}
                   script: |
                         DEPLOY_PATH="/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
-                        MARKER_FILE="$DEPLOY_PATH/build/.deploy-marker"
-                        if [ -f "$MARKER_FILE" ] && grep -1 "${GITHUB_SHA}" "$MARKER_FILE"; then
+                        MARKER_FILE="$DEPLOY_PATH/.deploy-marker"
+                        if [ -f "$MARKER_FILE" ] && grep -q "${GITHUB_SHA}" "$MARKER_FILE"; then
                             echo "Deployment Successful"
                         else
-                            echo "Deployment Failed
+                            echo "Deployment Failed"
                             exit 1
                         fi
