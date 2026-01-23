@@ -46,6 +46,24 @@ jobs:
                   source: "**"
                   target: "/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
                   rm: false
+            
+            - name: Install Packages using Composer
+              uses: appleboy/ssh-action@v0.1.7
+              with:
+                host: ${{ secrets.CPANEL_HOST }}
+                username: ${{ secrets.CPANEL_USER }}
+                key: ${{ secrets.CPANEL_SSH_KEY }}
+                script: |
+                        DEPLOY_PATH="/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
+                        cd "$DEPLOY_PATH"
+                        rm -rf vendor
+                        composer install --no-dev --optimize-autoloader
+                        if [ -d "$DEPLOY_PATH/vendor" ]; then
+                            echo "Composer packages installed successfully."
+                        else
+                            echo "Composer installation failed."
+                            exit 1
+                        fi
 
             - name: Check Deployment
               uses: appleboy/ssh-action@v0.1.7

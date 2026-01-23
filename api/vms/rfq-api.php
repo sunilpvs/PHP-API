@@ -146,7 +146,6 @@ switch ($method) {
             $username
         );
 
-        var_dump($username);
 
         if ($insertResult) {
             http_response_code(201);

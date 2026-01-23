@@ -123,7 +123,6 @@ switch ($method) {
         //     $logger->logRequestAndResponse($input, $error);
         //     break;
         // }
-        // var_dump($city, $state, $countr)
 
         $duplicate = $cityOb->checkDuplicateCity($city, $country, $state);
         if ($duplicate) {

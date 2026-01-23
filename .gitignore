@@ -1,5 +1,4 @@
-# CakePHP 3
-#/vendor/*
+
 /app.ini
 /app_ori.ini
 /.env
@@ -7,7 +6,7 @@
 /email.ini
 /.htaccess
 .htaccess
-/*.zip
+/vendor
 
 
 
