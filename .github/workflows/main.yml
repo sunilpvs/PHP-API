@@ -56,6 +56,7 @@ jobs:
                 script: |
                         DEPLOY_PATH="/home/${{ secrets.CPANEL_USER }}/${{ secrets.DEPLOY_DIR }}"
                         cd "$DEPLOY_PATH"
+                        rm -rf vendor
                         composer install --no-dev --optimize-autoloader
                         if [ -d "$DEPLOY_PATH/vendor" ]; then
                             echo "Composer packages installed successfully."
