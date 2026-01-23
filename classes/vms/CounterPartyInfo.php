@@ -126,7 +126,6 @@ class CounterPartyInfo
                 WHERE r.reference_id = ?";
         $this->logger->logQuery($query, [$reference_id], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$reference_id]);
-        var_dump($result);
         return $result;
     }
 

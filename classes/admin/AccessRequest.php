@@ -225,7 +225,6 @@ class AccessRequest {
 
         $emails = self::getITAdminEmails();
         $emailArray = explode(',', $emails);
-        // var_dump($emailArray);
 
         $response = $mailer->sendEmail(
             to: $emailArray,

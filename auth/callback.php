@@ -140,7 +140,6 @@
         "exp"   => time() + (60 * 60 * 3)
 
     ]); // 3 hours
-    var_dump($jwtAccess);
 
 
     $jwtRefresh = $jwt->generateRefreshToken([
