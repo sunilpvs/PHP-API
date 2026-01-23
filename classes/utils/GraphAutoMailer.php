@@ -5,7 +5,7 @@ class AutoMail {
     private $accessToken;
 
     public function __construct() {
-        $configFile = __DIR__.'/email.ini';       
+        $configFile = __DIR__.'/../../email.ini';       
         $this->config = parse_ini_file($configFile, true)['GraphAutoMailer'];
     }
 
