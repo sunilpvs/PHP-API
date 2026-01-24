@@ -32,7 +32,7 @@ if(!isset($_GET['portal'])){
     exit();
 }
 
-if(in_array($portal, ['admin', 'vms', 'vendor'])) {
+if(in_array($portal, ['admin', 'vms', 'vendor',  'ams'])) {
    
 } else {
     http_response_code(400);

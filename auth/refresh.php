@@ -1,4 +1,7 @@
 <?php
+// Set timezone to UTC for consistent JWT expiry handling
+date_default_timezone_set('UTC');
+
 // CORS headers
 // header("Access-Control-Allow-Origin: http://localhost:3000");
 // header("Access-Control-Allow-Credentials: true");
@@ -39,7 +42,7 @@ if(!isset($middleware_portal)){
     exit();
 }
 
-if(in_array($middleware_portal, ['admin', 'vms', 'vendor'])) {
+if(in_array($middleware_portal, ['admin', 'vms', 'vendor', 'ams'])) {
    
 } else {
     http_response_code(400);

@@ -1,4 +1,6 @@
 <?php
+// Set timezone to UTC for consistent JWT expiry handling
+date_default_timezone_set('UTC');
 
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     http_response_code(200);
@@ -42,7 +44,7 @@ if(!isset($_GET['portal'])){
     exit();
 }
 
-if(in_array($portal, ['admin', 'vms', 'vendor'])) {
+if(in_array($portal, ['admin', 'vms', 'vendor', 'ams'])) {
 } else {
     http_response_code(400);
     echo json_encode(["error" => "Invalid portal specified"]);
@@ -65,6 +67,13 @@ if($portal === 'vms'){
     exit();
 }
 
+if($portal === 'ams'){
+    $portal = 'ams';
+    http_response_code(400);
+    echo json_encode(["error" => "You cant login to ams portal using username and password. 
+                                    Please use Microsoft SSO"]);
+    exit();
+}
 $username = $input['username'] ?? '';
 $password = $input['password'] ?? '';
 $reqType = $_GET['req'] ?? '';

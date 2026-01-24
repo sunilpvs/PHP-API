@@ -1,5 +1,6 @@
 <?php
 // Display all PHP configuration information
-phpinfo();
+
+echo date_default_timezone_get();
 
 ?>

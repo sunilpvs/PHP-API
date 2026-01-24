@@ -1,5 +1,7 @@
 <?php
-    session_start();
+    // Set timezone to UTC for consistent JWT expiry handling
+    date_default_timezone_set('UTC');
+    
     require __DIR__.'../../vendor/autoload.php';
     use League\OAuth2\Client\Provider\GenericProvider;
     use Dotenv\Dotenv;
@@ -33,6 +35,7 @@
 
     // Detect subdomain (admin or vms)
     $portal = $_GET['portal'] ?? 'vms';
+
 
     $_SESSION['portal'] = $portal;
     // echo "Portal: " . $portal . "\n";

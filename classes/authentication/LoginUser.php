@@ -1,24 +1,25 @@
 <?php
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 
 
 require_once __DIR__ . '/../DbController.php';
 require_once(__DIR__ . "/JWTHandler.php");
+require_once(__DIR__ . "/../Logger.php");
 
 class UserLogin
 {
     private $conn;
     private $jwt;
+    private $logger;
 
 
     function __construct()
     {
         $this->conn = new DBController();
         $this->jwt = new JWTHandler();
+        $debugMode = isset($config['DEBUG_MODE']) && in_array(strtolower($config['DEBUG_MODE']), ['1', 'true'], true);
+        $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
+        $this->logger = new Logger($debugMode, $logDir);
     }
 
     function validateUserLogin($username, $password)
@@ -110,7 +111,7 @@ class UserLogin
     function getUserIdFromJWT()
     {
         $token = $this->getToken(); // Retrieve the token
-        
+
 
         // if token is not found, return error 
         if (!$token) {
@@ -122,7 +123,7 @@ class UserLogin
         $decodedToken = $this->jwt->decodeJWT($token);
 
         $userId = $decodedToken['sub'] ?? null;
-        
+
         if ($userId) {
             return $userId;
         } else {
@@ -178,11 +179,62 @@ class UserLogin
         }
     }
 
-    function resetPassword($userId, $newPassword)
+    function initiateForgotPassword($userId, $token, $expiryMinutes)
     {
-        $query = 'UPDATE tbl_users SET password_last_changed_at = ? WHERE id = ?';
-        // Log the query with parameters
-        // $logMessage = 'Password Reset ';
-        return $this->conn->update($query, [$newPassword, $userId]);
+        $query = 'UPDATE tbl_password_resets
+                    SET used_at = NOW()
+                    WHERE user_id = ?
+                    AND used_at IS NULL';
+        $params = [$userId];
+        $this->logger->logQuery($query, $params, 'Invalidate Previous Password Reset Tokens');
+        $this->conn->update($query, $params);
+
+        $query = 'INSERT INTO tbl_password_resets(user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))';
+        $params = [$userId, hash('sha256', $token), $expiryMinutes];
+        $this->logger->logQuery($query, $params, 'Initiate Forgot Password');
+        $result = $this->conn->insert($query, $params);
+        if ($result > 0) {
+            return true;
+        }
+        return false;
+    }
+
+    function changePassword($userId, $newPassword, $resetRecordId)
+    {
+        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+        $query = "UPDATE tbl_users SET password = ? WHERE id = ?";
+        $params = [$hashedPassword, $userId];
+        $this->logger->logQuery($query, $params, 'Change Password');
+        $changePasswordResult = $this->conn->update($query, $params);
+
+
+
+        // update tbl_password_resets to mark the token as used
+        $query = "UPDATE tbl_password_resets SET used_at = NOW() WHERE id=?";
+        $params = [$resetRecordId];
+        $this->logger->logQuery($query, $params, 'Mark Password Reset Token as Used');
+        $markTokenUsedResult = $this->conn->update($query, $params);
+
+        if ($changePasswordResult > 0 && $markTokenUsedResult > 0) {
+            return true;
+        }
+        return false;
+    }
+
+    function getValidPasswordResetRecord($userId, $token)
+    {
+        $tokenHash = hash('sha256', $token);
+
+        $query = "
+        SELECT id
+        FROM tbl_password_resets
+        WHERE user_id = ?
+          AND token_hash = ?
+          AND used_at IS NULL
+          AND expires_at > NOW()
+        LIMIT 1
+    ";
+
+        return $this->conn->runSingle($query, [$userId, $tokenHash]);
     }
 }

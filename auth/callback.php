@@ -11,7 +11,6 @@
     use Dotenv\Dotenv;
 
 
-    session_start();
     require "../vendor/autoload.php";
     require_once($_SERVER['DOCUMENT_ROOT'] . "/classes/authentication/JWTHandler.php");
     require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
@@ -188,11 +187,12 @@
 
     $redirectMap = [
         'admin' => $_ENV['ADMIN_PORTAL_URL'],
-        'vms' => $_ENV['VMS_PORTAL_URL']
+        'vms' => $_ENV['VMS_PORTAL_URL'],
+        'ams' => $_ENV['AMS_PORTAL_URL']
     ];
     
     // Redirect to frontend
-    $redirectURI = $redirectMap[$subDomain] ?? $redirectMap['vms'];
+    $redirectURI = $redirectMap[$subDomain];
     header("Location: $redirectURI");
     exit;
 
