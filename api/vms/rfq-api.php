@@ -94,6 +94,25 @@ switch ($method) {
             break;
         }
 
+        if(isset($_GET['type']) && $_GET['type'] == 'submitted-rfq-count') {
+            $submittedCount = $rfqOb->getSubmittedRfqsCount($module, $username);
+            http_response_code(200);
+            $response = ['submitted_count' => $submittedCount];
+            echo json_encode($response);
+            $logger->logRequestAndResponse($_GET, $response);
+            break;
+        }
+
+        if (isset($_GET['type']) && $_GET['type'] == 'active-vendor-count') {
+            $activeVendorCount = $rfqOb->getActiveVendorsCount($module, $username);
+            http_response_code(200);
+            $response = ['active_vendor_count' => $activeVendorCount];
+            echo json_encode($response);
+            $logger->logRequestAndResponse($_GET, $response);
+            break;
+        }
+
+
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
         $offset = ($page - 1) * $limit;

@@ -679,4 +679,20 @@ class Rfq
         $result = $this->conn->runQuery($query, [$days]);
         return $result;
     }
+
+    public function getSubmittedRfqsCount($module, $username)
+    {
+        $query = 'SELECT COUNT(*) AS total FROM vms_rfqs WHERE status IN (8)';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        $result = $this->conn->runQuery($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
+
+    public function getActiveVendorsCount($module, $username)
+    {
+        $query = 'SELECT COUNT(*) AS total FROM vms_vendor WHERE vendor_status = 11';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        $result = $this->conn->runQuery($query);
+        return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+    }
 }
