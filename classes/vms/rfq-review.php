@@ -37,9 +37,9 @@ class RfqReview
         // load environment variables
         $this->env = getenv('APP_ENV') ?: 'local';
         if ($this->env === 'production') {
-            $this->dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env.prod');
+            $this->dotenv = Dotenv::createImmutable(__DIR__ . '/../../', '.env.prod');
         } else {
-            $this->dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env');
+            $this->dotenv = Dotenv::createImmutable(__DIR__ . '/../../', '.env');
         }
         $this->dotenv->load();
 
