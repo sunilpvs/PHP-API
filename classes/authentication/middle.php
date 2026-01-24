@@ -18,6 +18,8 @@ require_once($_SERVER['DOCUMENT_ROOT']."/classes/authentication/JWTHandler.php")
 
 function authenticateJWT() {
     $token = $_COOKIE['access_token'] ?? '';
+    $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+    $portals = array_map('trim', explode(',', $config['portals']['portals']));
     
     if (!$token) {
         $headers = getallheaders();
@@ -48,7 +50,7 @@ function authenticateJWT() {
         exit();
     }
 
-    if($portal !== 'admin' && $portal !== 'vms' && $portal !== 'vendor'){
+    if(!in_array($portal, $portals)) {
         http_response_code(401);
         echo json_encode(["error" => "Invalid portal in token"]);
         exit();

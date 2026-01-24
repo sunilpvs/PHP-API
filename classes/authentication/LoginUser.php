@@ -17,7 +17,7 @@ class UserLogin
     {
         $this->conn = new DBController();
         $this->jwt = new JWTHandler();
-        $debugMode = isset($config['DEBUG_MODE']) && in_array(strtolower($config['DEBUG_MODE']), ['1', 'true'], true);
+        $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
         $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
         $this->logger = new Logger($debugMode, $logDir);
     }
@@ -66,10 +66,6 @@ class UserLogin
 
     function getUserData($row)
     {
-        $ini_file_path = $_SERVER['DOCUMENT_ROOT'] . "/app.ini";
-        $ini_file = parse_ini_file($ini_file_path);
-        $app_url = $ini_file["app_url"];
-        $logo = $ini_file["logo"];
 
         return [
             'user_name' => $row["user_name"],

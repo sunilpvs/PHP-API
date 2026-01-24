@@ -19,8 +19,6 @@
     }
     $dotenv->load();
 
-    // detect subdomain
-    
 
     $provider = new GenericProvider([
         'tenant_id'               => $config['tenant_id'],
@@ -33,8 +31,8 @@
         'scopes'                  => $config['scopes'],
     ]);
 
-    // Detect subdomain (admin or vms)
-    $portal = $_GET['portal'] ?? 'vms';
+    // Detect subdomain (portal) from url parameter or session
+    $portal = $_GET['portal'];
 
 
     $_SESSION['portal'] = $portal;

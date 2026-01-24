@@ -11,7 +11,7 @@ try {
     $db = new DbController();
     $rfqObj = new Rfq();
     $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
-    $debugMode = isset($config['DEBUG_MODE']) && in_array(strtolower($config['DEBUG_MODE']), ['1', 'true'], true);
+    $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 
     $logger = new Logger(false, $_SERVER['DOCUMENT_ROOT'] . '/logs');
     $expiredRfqs = $rfqObj->getExpiredRfqs($db); // gives an array of expired RFQs

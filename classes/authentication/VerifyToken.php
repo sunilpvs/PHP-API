@@ -19,6 +19,9 @@ function verifyToken($middleware_portal) {
     $jwt = new JWTHandler();
 
     $token = $_COOKIE['access_token'] ?? '';
+    $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+    $portals = array_map('trim', explode(',', $config['portals']['portals']));
+
 
 
     if (!$token) {
@@ -50,7 +53,7 @@ function verifyToken($middleware_portal) {
         exit();
     }
 
-    if($portal !== 'admin' && $portal !== 'vms' && $portal !== 'vendor'){
+    if(!in_array($portal, $portals)) {
         http_response_code(401);
         echo json_encode(["error" => "Invalid portal in token"]);
         exit();
@@ -61,7 +64,9 @@ function verifyToken($middleware_portal) {
         echo json_encode(["error" => "Portal mismatch"]);
         exit();
     }
-
+    $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
+    var_dump($config['DEBUG_MODE']);
+    var_dump($debugMode);
     http_response_code(200);
     echo json_encode(["message" => "Access granted"]);
     exit();

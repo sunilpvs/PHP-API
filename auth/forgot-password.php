@@ -31,14 +31,16 @@ if ($env === 'production') {
 }
 $dotenv->load();
 
+// Parse app config
+$config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+
 // initiate Logger
-$debugMode = isset($_ENV['DEBUG_MODE']) && in_array(strtolower($_ENV['DEBUG_MODE']), ['1', 'true'], true);
+
+$debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
 $module = 'ForgotPassword';
 
-// Parse app config
-$config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
 
 // Read input JSON
 $input = json_decode(file_get_contents('php://input'), true) ?? [];

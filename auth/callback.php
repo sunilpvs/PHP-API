@@ -29,7 +29,7 @@
 
     $dbObject = new DbController();
     $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
-    $debugMode = isset($config['DEBUG_MODE']) && in_array(strtolower($config['DEBUG_MODE']), ['1', 'true'], true);
+    $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
     $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
     $logger = new Logger($debugMode, $logDir);
     $module = 'OAuth';
@@ -68,7 +68,7 @@
     $me = $graph->createRequest("GET", "/me")->setReturnType(Model\User::class)->execute();
 
      // get the subdomain from state parameter
-    $subDomain = $_GET['state'] ?? $_SESSION['portal'] ?? 'vms';
+    $subDomain = $_GET['state'] ?? $_SESSION['portal'];
 
     $email = $me->getMail() ?? $me->getUserPrincipalName();
     $username = $email ?: 'guest';;

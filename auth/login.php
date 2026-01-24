@@ -17,11 +17,11 @@ use Dotenv\Dotenv;
 
 
 $env = getenv('APP_ENV') ?: 'local';
-if($env === 'production'){
+if ($env === 'production') {
     $dotenv = Dotenv::createImmutable(__DIR__ . "/../", ".env.prod");
-}else{
+} else {
     // 'C:\Users\BHASKARA TEJA\PVS Consultancy Services\PVS Sunil Babu - 04-PROJECTS\PHP\PHP_API\auth/../\.env'
-    $dotenv= Dotenv::createImmutable(__DIR__ . "/../", ".env");
+    $dotenv = Dotenv::createImmutable(__DIR__ . "/../", ".env");
 }
 
 
@@ -29,6 +29,8 @@ $dotenv->load();
 
 $cookieDomain = $_ENV['COOKIE_DOMAIN'];
 $url = $_ENV['MICROSOFT_REDIRECT_URI'];
+$config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+$portals = array_map('trim', explode(',', $config['portals']['portals']));
 
 // echo "Setting cookie domain to: " . $cookieDomain . "\n";
 
@@ -38,42 +40,40 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 $portal = $_GET['portal'] ?? 'vendor';
 
-if(!isset($_GET['portal'])){
+if (!isset($_GET['portal'])) {
     http_response_code(400);
     echo json_encode(["error" => "Portal parameter is required"]);
     exit();
 }
 
-if(in_array($portal, ['admin', 'vms', 'vendor', 'ams'])) {
-} else {
+if (!in_array($portal, $portals)) {
     http_response_code(400);
     echo json_encode(["error" => "Invalid portal specified"]);
     exit();
 }
 
-if($portal === 'admin'){
+
+if ($portal === 'admin') {
     $portal = 'admin';
     http_response_code(400);
-    echo json_encode(["error" => "You cant login to admin portal using username and password. 
-                                    Please use Microsoft SSO"]);
+    echo json_encode(["error" => "You cant login to admin portal using username and password. Please use Microsoft SSO"]);
     exit();
 }
 
-if($portal === 'vms'){
+if ($portal === 'vms') {
     $portal = 'vms';
     http_response_code(400);
-    echo json_encode(["error" => "You cant login to vms portal using username and password. 
-                                    Please use Microsoft SSO"]);
+    echo json_encode(["error" => "You cant login to vms portal using username and password. Please use Microsoft SSO"]);
     exit();
 }
 
-if($portal === 'ams'){
+if ($portal === 'ams') {
     $portal = 'ams';
     http_response_code(400);
-    echo json_encode(["error" => "You cant login to ams portal using username and password. 
-                                    Please use Microsoft SSO"]);
+    echo json_encode(["error" => "You cant login to ams portal using username and password. Please use Microsoft SSO"]);
     exit();
 }
+
 $username = $input['username'] ?? '';
 $password = $input['password'] ?? '';
 $reqType = $_GET['req'] ?? '';
@@ -138,14 +138,14 @@ if ($verify) {
         "domain" => $portal,
         "iat" => time(),
         "exp" => time() + (60 * 60 * 24 * 7) // Refresh token valid for 7 days
-    ]); 
+    ]);
 
 
     // echo $access_token;
     // echo $refreshToken;
 
 
-    
+
 
     $responseData = [
         "message" => "Login successful",
@@ -184,7 +184,6 @@ if ($verify) {
 
     http_response_code(200);
     echo json_encode($responseData);
-
 } else {
     http_response_code(401);
     echo json_encode(["error" => "Invalid credentials"]);

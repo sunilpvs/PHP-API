@@ -14,42 +14,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-require_once($_SERVER['DOCUMENT_ROOT']."/vendor/autoload.php");
-require_once($_SERVER['DOCUMENT_ROOT'].'/classes/authentication/JWTHandler.php');
+require_once($_SERVER['DOCUMENT_ROOT'] . "/vendor/autoload.php");
+require_once($_SERVER['DOCUMENT_ROOT'] . '/classes/authentication/JWTHandler.php');
 
 use Dotenv\Dotenv;
 
 
 $env = getenv('APP_ENV') ?: 'local';
 
-if($env === 'production'){
+if ($env === 'production') {
     $dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env.prod');
-}else{
-    $dotenv= Dotenv::createImmutable(__DIR__ . '/../', '.env');
+} else {
+    $dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env');
 }
 $dotenv->load();
 
 $cookieDomain = $_ENV['COOKIE_DOMAIN'];
 
 $jwt = new JWTHandler();
-
+$config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+$portals = array_map('trim', explode(',', $config['portals']['portals']));
 
 $middleware_portal = $_GET['portal'] ?? '';
 
-if(!isset($middleware_portal)){
+if (!isset($middleware_portal)) {
     http_response_code(400);
     echo json_encode(["error" => "Portal parameter is required"]);
     exit();
 }
 
-if(in_array($middleware_portal, ['admin', 'vms', 'vendor', 'ams'])) {
-   
-} else {
+if (!in_array($middleware_portal, $portals)) {
     http_response_code(400);
     echo json_encode(["error" => "Invalid portal specified"]);
     exit();
 }
-
 
 $refreshToken = $_COOKIE['refresh_token'] ?? '';
 
@@ -69,12 +67,12 @@ if (!$verified) {
     exit();
 }
 
-if($verified->domain !== $middleware_portal) {
+if ($verified->domain !== $middleware_portal) {
     http_response_code(401);
     echo json_encode(["error" => "Refresh token does not match the portal"]);
     exit();
 }
-    
+
 
 $username = $verified->username;
 
@@ -92,7 +90,7 @@ setcookie(
     $newAccessToken,
     [
         "expires" => time() + (60 * 15),
-        "path" => "/", 
+        "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
         "httponly" => true,

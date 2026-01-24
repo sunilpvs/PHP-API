@@ -12,7 +12,7 @@ class CounterPartyInfo
     {
         $this->conn = new DBController();
         $this->config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
-        $debugMode = isset($this->config['DEBUG_MODE']) && in_array(strtolower($this->config['DEBUG_MODE']), ['1', 'true'], true);
+        $debugMode = isset($this->config['generic']['DEBUG_MODE']) && in_array(strtolower($this->config['generic']['DEBUG_MODE']), ['1', 'true'], true);
         $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
         $this->logger = new Logger($debugMode, $logDir);
     }

@@ -10,8 +10,8 @@ class JWTHandler {
 
     function __construct() 
     {
-        $this->config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
-        $this->secretKey = $this->config['jwt_secret'];
+        $this->config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+        $this->secretKey = $this->config['jwt']['jwt_secret'];
         $this->algorithm = "HS256";
     }
     // Generate access token (Short-lived)
