@@ -10,6 +10,7 @@
     
     use Dotenv\Dotenv;
 
+    session_start();
 
     require "../vendor/autoload.php";
     require_once($_SERVER['DOCUMENT_ROOT'] . "/classes/authentication/JWTHandler.php");
@@ -58,7 +59,9 @@
 
     // Microsoft OAuth
     $auth = new Auth($tenant_id, $client_id, $client_secret, $redirect_uri, $scopes);
-    $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
+      $state = $_GET['state'] ?? null;
+    // $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
+    $tokens = $auth->getToken($_GET['code'], $state);
     $msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
     $auth->setAccessToken($msAccessToken);
 
