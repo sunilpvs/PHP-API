@@ -18,7 +18,7 @@ class UserLogin
         $this->conn = new DBController();
         $this->jwt = new JWTHandler();
         $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
-        $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
+        $logDir = __DIR__. '/../logs';
         $this->logger = new Logger($debugMode, $logDir);
     }
 

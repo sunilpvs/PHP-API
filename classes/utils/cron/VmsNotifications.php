@@ -8,10 +8,10 @@ require_once __DIR__ . '/../GraphAutoMailer.php';
 
 try {
     $rfqObj = new Rfq();
-    $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
+    $config = parse_ini_file(__DIR__ . '/../../../app.ini');
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 
-    $logger = new Logger(false, $_SERVER['DOCUMENT_ROOT'] . '/logs');
+    $logger = new Logger($debugMode, __DIR__ . '/../../../logs');
    
     // Loop through each notification interval
     $daysArray = [60, 45, 30, 15, 7, 3, 1];

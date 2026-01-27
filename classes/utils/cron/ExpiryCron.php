@@ -10,10 +10,10 @@ require_once __DIR__ . '/../GraphAutoMailer.php';
 try {
     $db = new DbController();
     $rfqObj = new Rfq();
-    $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
+    $config = parse_ini_file(__DIR__ . '/../../../app.ini');
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 
-    $logger = new Logger($debugMode, $_SERVER['DOCUMENT_ROOT'] . '/logs');
+    $logger = new Logger($debugMode, __DIR__ . '/../../../logs');
     $expiredRfqs = $rfqObj->getExpiredRfqsByDate(); // gives an array of expired RFQs
 
     foreach ($expiredRfqs as $rfq) {

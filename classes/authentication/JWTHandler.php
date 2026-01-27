@@ -10,7 +10,7 @@ class JWTHandler {
 
     function __construct() 
     {
-        $this->config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
+        $this->config = parse_ini_file(__DIR__ . '/../../app.ini', true);
         $this->secretKey = $this->config['jwt']['jwt_secret'];
         $this->algorithm = "HS256";
     }
