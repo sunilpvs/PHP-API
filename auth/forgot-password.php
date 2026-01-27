@@ -64,7 +64,7 @@ try {
         [$email, $email]
     );
 
-    if (!$user['email']) {
+    if (empty($user) || !isset($user['email']) || !$user['email']) {
         // User not found
         $logger->log("No account found with email: $email", $module);
         http_response_code(400);
@@ -103,7 +103,7 @@ try {
         echo json_encode(["error" => "Vendor login URL not configured"]);
         exit();
     }
-    $resetBase = preg_replace('#/login$#', '/reset-pwd', $vendorLoginUrl);
+    $resetBase = preg_replace('#/login$#', '/reset-password', $vendorLoginUrl);
                  
     $resetLink = $resetBase . '?token=' . urlencode($token);
 

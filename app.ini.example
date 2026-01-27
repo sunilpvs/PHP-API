@@ -27,7 +27,7 @@ refresh_token = "60 * 24 * 7"
 
 
 
-[jwt secret key]
+[jwt]
 jwt_secret = "jwt secret key value"
 
 [m365]  
@@ -45,3 +45,6 @@ scopes                  = 'User.ReadBasic.All User.Read.All Directory.Read.All I
 session.cookie_secure = true
 session.cookie_httponly = true
 session.use_strict_mode = 1
+
+[portals]
+portals   =  "admin, vms, vendor, ams"

@@ -62,6 +62,18 @@ if (!$userId) {
     exit;
 }
 
+// initiate user login class
+$user = new UserLogin();
+
+// verify password reset record
+$resetRecord = $user->getValidPasswordResetRecord($userId, $token);
+if (!$resetRecord) {
+    http_response_code(400);
+    echo json_encode(["error" => "Invalid or expired reset link"]);
+    exit;
+}
+
+
 $logger->log("Token validated for user ID: $userId", "ResetPassword");
 $newPassword = $input['new_password'] ?? null;
  
@@ -79,21 +91,10 @@ if (
     !preg_match('/[\W]/', $newPassword)
 ) {
     http_response_code(400);
-    echo json_encode(["error" => "Password does not meet complexity requirements. 
+    echo json_encode(["error" => "Password does not meet requirements. 
                 It must be at least 8 characters long and include uppercase letters, 
                 lowercase letters, numbers, and special characters."
             ]);
-    exit;
-}
-
-// initiate user login class
-$user = new UserLogin();
-
-// verify password reset record
-$resetRecord = $user->getValidPasswordResetRecord($userId, $token);
-if (!$resetRecord) {
-    http_response_code(400);
-    echo json_encode(["error" => "Invalid or expired reset link"]);
     exit;
 }
 
@@ -115,7 +116,7 @@ if(!$status){
 $logger->log("Password reset successfully for user ID: $userId", "ResetPassword");
 http_response_code(200);
 echo json_encode([
-    "message" => "Password has been reset successfully"
+    "message" => "Password has been reset successfully. You can now log in with your new password."
 ]);
 exit();
  
