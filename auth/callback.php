@@ -59,9 +59,7 @@
 
     // Microsoft OAuth
     $auth = new Auth($tenant_id, $client_id, $client_secret, $redirect_uri, $scopes);
-      $state = $_GET['state'] ?? null;
-    // $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
-    $tokens = $auth->getToken($_GET['code'], $state);
+    $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
     $msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
     $auth->setAccessToken($msAccessToken);
 
@@ -71,7 +69,7 @@
     $me = $graph->createRequest("GET", "/me")->setReturnType(Model\User::class)->execute();
 
      // get the subdomain from state parameter
-    $subDomain = $_GET['state'] ?? $_SESSION['portal'];
+    $subDomain = $_REQUEST['state'] ?? $_SESSION['portal'];
 
     $email = $me->getMail() ?? $me->getUserPrincipalName();
     $username = $email ?: 'guest';;
@@ -91,7 +89,8 @@
         $query = 'INSERT INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
                         VALUES (?, ?, ?, ?, 1, 1, 1, 1, 6, 14, ?, ?, 1, 1)';
         $mobilePhone = $me->getMobilePhone() ?? '';
-        $params = [$me->getGivenName(), $me->getSurname(), $email, $email, $mobilePhone, 2];
+        $lname = $me->getSurname() ?? 'lname';
+        $params = [$me->getGivenName(), $lname, $email, $email, $mobilePhone, 2];
         $logger->logQuery($query, $params, 'classes', $module, $username);
         $userInsertionId = $dbObject->insert($query, $params, 'User contact created from Microsoft OAuth');
 

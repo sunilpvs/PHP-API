@@ -3,6 +3,8 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
 require $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/GraphAutoMailer.php';
 require $_SERVER['DOCUMENT_ROOT']."/vendor/autoload.php";
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/vms/Rfq.php';
+
 
 use Dotenv\Dotenv;
 
@@ -21,12 +23,13 @@ class AccessRequest {
     private $logger;
     private $app_url;
     private $vms_url;
-
+    private $rfqData;
     
 
     public function __construct() {
         // $this->mailer = new AutoMail();
         $this->conn = new DBController();
+        $this->rfqData = new Rfq();
         $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
         $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
         $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
@@ -34,6 +37,7 @@ class AccessRequest {
         $this->logger = new Logger($debugMode, $logDir);
         $this->app_url = $_ENV['ADMIN_PORTAL_URL'] ?? '';
         $this->vms_url = $_ENV['VMS_PORTAL_URL'] ?? '';
+        
     }
 
     public function getAllAccessRequests($module, $username) {
@@ -223,15 +227,18 @@ class AccessRequest {
             "Approval Link" => $this->app_url,
         ];
 
-        $emails = self::getITAdminEmails();
-        $emailArray = explode(',', $emails);
+        // $emails = self::getITAdminEmails();
+        $ItAdminEmails = $this->rfqData->getITAdminEmails('access request', 'system');
+        // $emailArray = explode(',', $emails);
 
-        $response = $mailer->sendEmail(
-            to: $emailArray,
+        $response = $mailer->sendInfoEmail(
             subject: "New Access Request for $requested_module_name",
+            greetings: "Dear IT Admin,",
+            name: 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
-            cc: ['bhaskar.teja@pvs-consultancy.com'],
-            bcc: ['team.pvs@pvs-consultancy.com'],
+            to: $ItAdminEmails,
+            cc: [], // remove this in production
+            bcc: $ItAdminEmails,
         );
         // echo $response;
 
@@ -318,14 +325,17 @@ class AccessRequest {
                 "Employee Name" => $req_name,
             ];
         }
+        $ItAdminEmails = $this->rfqData->getITAdminEmails('access request', 'system');
         $mailer = new AutoMail();
 
-        $response = $mailer->sendEmail(
-            to: [$requestor_email],
+        $response = $mailer->sendInfoEmail(
             subject: "Your Access Request for $requested_module has been $statusMessage",
+            greetings: "Dear $req_name,",
+            name: 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
-            cc: ['bhaskara.teja@pvs-consultancy.com'],
-            bcc: ['team.pvs@pvs-consultancy.com'],
+            to: [$requestor_email],
+            cc: [], // remove this in production
+            bcc: $ItAdminEmails,
         );
 
         if ($response) {

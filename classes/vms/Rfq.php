@@ -147,14 +147,17 @@ class Rfq
                 Password: $randomPassword"
         ];
 
+        $vmsAdminEmails = $this->getVmsAdminEmails($module, $username);
+
         // Prepare email data and send email using the mailer
-        $emailSent = $mailer->sendEmail(
-            to: [$email],
-            subject: 'Vendor Registration Details',
+        $emailSent = $mailer->sendInfoEmail(
+            subject: "Vendor Registration Details",
+            greetings: "Dear Vendor,",
+            name: 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
-            cc: ['sunil.pvs@pvs-consultancy.com', 'ramalakshmi@pvs-consultancy.com', 'bhaskar.teja@pvs-consultancy.com'],
-            bcc: ['team.pvs@pvs-consultancy.com'],
-            attachments: []
+            to: [$email],
+            cc: [], // remove this in production
+            bcc: $vmsAdminEmails,
         );
 
         if ($emailSent) {
@@ -348,38 +351,38 @@ class Rfq
         return $result ? $result['email'] : null;
     }
 
-//     -- Table structure for table `vms_rfqs`
-//   CREATE TABLE vms_rfqs (
-//     id INT AUTO_INCREMENT PRIMARY KEY,
-//     reference_id VARCHAR(20) NOT NULL UNIQUE, -- acts as temporary vendor ID RFIVEN-001
-//     vendor_id INT(11) DEFAULT NULL,            -- filled after approval. First time Vendor it will be blank , for renewals etc this will be taken from Vendor Screen.
-//     vendor_name VARCHAR(100),
-//     contact_name VARCHAR(100),
-//     email VARCHAR(100),
-//     mobile VARCHAR(15) NOT NULL,
-//     entity_id INT DEFAULT NULL,
-//     status INT DEFAULT NULL,
-//     email_sent BOOLEAN DEFAULT FALSE,
-//     submission_count INT DEFAULT 1,
-//     is_active BOOLEAN DEFAULT FALSE,
-// 	expiry_date DATETIME DEFAULT NULL,
-//     created_by INT NOT NULL,
-//     created_datetime DATETIME DEFAULT CURRENT_TIMESTAMP,
-//     last_updated INT DEFAULT NULL,
-//     last_updated_datetime DATETIME DEFAULT NULL
-    
-// );
-// -- --------------------------------------------------------
-// -- Table structure for table `vms_vendor`
-// CREATE TABLE vms_vendor (
-// 	id INT AUTO_INCREMENT PRIMARY KEY,
-//     active_rfq INT(11),  -- link back to RFQ
-//     vendor_code varchar(50) DEFAULT NULL UNIQUE, -- Created and updated for first time RFQ approval.
-//     vendor_status INT(11), -- Active, Expired, Suspended, Blocked
-//     entity_id INT(11), 
-//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-//     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-// );
+    //     -- Table structure for table `vms_rfqs`
+    //   CREATE TABLE vms_rfqs (
+    //     id INT AUTO_INCREMENT PRIMARY KEY,
+    //     reference_id VARCHAR(20) NOT NULL UNIQUE, -- acts as temporary vendor ID RFIVEN-001
+    //     vendor_id INT(11) DEFAULT NULL,            -- filled after approval. First time Vendor it will be blank , for renewals etc this will be taken from Vendor Screen.
+    //     vendor_name VARCHAR(100),
+    //     contact_name VARCHAR(100),
+    //     email VARCHAR(100),
+    //     mobile VARCHAR(15) NOT NULL,
+    //     entity_id INT DEFAULT NULL,
+    //     status INT DEFAULT NULL,
+    //     email_sent BOOLEAN DEFAULT FALSE,
+    //     submission_count INT DEFAULT 1,
+    //     is_active BOOLEAN DEFAULT FALSE,
+    // 	expiry_date DATETIME DEFAULT NULL,
+    //     created_by INT NOT NULL,
+    //     created_datetime DATETIME DEFAULT CURRENT_TIMESTAMP,
+    //     last_updated INT DEFAULT NULL,
+    //     last_updated_datetime DATETIME DEFAULT NULL
+
+    // );
+    // -- --------------------------------------------------------
+    // -- Table structure for table `vms_vendor`
+    // CREATE TABLE vms_vendor (
+    // 	id INT AUTO_INCREMENT PRIMARY KEY,
+    //     active_rfq INT(11),  -- link back to RFQ
+    //     vendor_code varchar(50) DEFAULT NULL UNIQUE, -- Created and updated for first time RFQ approval.
+    //     vendor_status INT(11), -- Active, Expired, Suspended, Blocked
+    //     entity_id INT(11), 
+    //     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    //     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    // );
 
     // ✅ Get Vendor Email by Vendor Code based on above table structures
     public function getEmailByVendorCode($vendor_code, $module, $username)
@@ -607,34 +610,38 @@ class Rfq
         $query = 'SELECT vendor_id FROM vms_rfqs WHERE reference_id = ? AND vendor_id IS NOT NULL';
         $this->logger->logQuery($query, [$reference_id], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$reference_id]);
-        if($result['vendor_id'] !== null && !empty($result['vendor_id'])) {
+        if ($result['vendor_id'] !== null && !empty($result['vendor_id'])) {
             return true;
         }
         return false;
     }
 
-    public function getVendorIdByReferenceId($reference_id, $module, $username){
+    public function getVendorIdByReferenceId($reference_id, $module, $username)
+    {
         $query = 'SELECT vendor_id FROM vms_rfqs WHERE reference_id = ?';
         $this->logger->logQuery($query, [$reference_id], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$reference_id]);
         return $result ? $result['vendor_id'] : null;
     }
 
-    public function getVendorCodeByVendorId($vendor_id, $module, $username){
+    public function getVendorCodeByVendorId($vendor_id, $module, $username)
+    {
         $query = 'SELECT vendor_code FROM vms_vendor WHERE id = ?';
         $this->logger->logQuery($query, [$vendor_id], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$vendor_id]);
         return $result ? $result['vendor_code'] : null;
     }
 
-    public function getExpiredRfqsByDate(){
+    public function getExpiredRfqsByDate()
+    {
         $query = 'SELECT id, reference_id FROM vms_rfqs WHERE expiry_date IS NOT NULL AND expiry_date < CURDATE() AND status = 11';
         $this->logger->logQuery($query, [], 'classes');
         $result = $this->conn->runQuery($query);
         return $result;
     }
 
-    public function getExpiredRfqs(){
+    public function getExpiredRfqs()
+    {
         $query = 'SELECT r.id, v.vendor_code, v.vendor_id, r.user_id, r.reference_id FROM vms_rfqs r 
                     JOIN vms_vendor v ON r.vendor_id = v.id
                     WHERE status = 15';
@@ -643,14 +650,16 @@ class Rfq
         return $result;
     }
 
-    public function hasOtherActiveRfqs($vendor_id, $module){
+    public function hasOtherActiveRfqs($vendor_id, $module)
+    {
         $query = 'SELECT 1 FROM vms_rfqs WHERE vendor_id = ? AND status = 11 LIMIT 1';
         $this->logger->logQuery($query, [$vendor_id], 'classes', $module);
         $result = $this->conn->runSingle($query, [$vendor_id]);
         return $result ? true : false;
     }
 
-    public function getActiveRfqForVendor($vendor_id, $module){
+    public function getActiveRfqForVendor($vendor_id, $module)
+    {
         $query = 'SELECT r.id, r.reference_id, r.email, v.vendor_code FROM vms_rfqs r 
                     JOIN vms_vendor v ON r.vendor_id = v.id 
                     WHERE r.vendor_id = ? AND r.status = 11 LIMIT 1';
@@ -671,7 +680,20 @@ class Rfq
         return $emails;
     }
 
-    public function getRfqsByDays($days){
+    public function getITAdminEmails($module, $username)
+    {
+        $query = "SELECT email FROM tbl_user_modules WHERE user_role_id = 2";
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        $results = $this->conn->runQuery($query);
+        $emails = [];
+        foreach ($results as $row) {
+            $emails[] = $row['email'];
+        }
+        return $emails;
+    }
+
+    public function getRfqsByDays($days)
+    {
         $query = 'SELECT id, reference_id, vendor_id, contact_name, email, mobile, entity_id, status, created_datetime 
                     FROM vms_rfqs 
                     WHERE DATEDIFF(expiry_date, CURDATE()) = ?';
