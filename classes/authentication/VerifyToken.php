@@ -65,8 +65,6 @@ function verifyToken($middleware_portal) {
         exit();
     }
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
-    var_dump($config['DEBUG_MODE']);
-    var_dump($debugMode);
     http_response_code(200);
     echo json_encode(["message" => "Access granted"]);
     exit();
