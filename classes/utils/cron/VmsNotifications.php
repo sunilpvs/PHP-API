@@ -69,4 +69,11 @@ try {
     
  catch (Exception $e) {
     $logger->log("Error in VmsNotifications Cron: " . $e->getMessage(), 'ERROR', 'cron');
+
+    // Additionally, write to a separate log file if logger is not available
+    file_put_contents(
+        __DIR__ . '/VmsNotificationsError.log',
+        "[" . date('Y-m-d H:i:s') . "] " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n\n",
+        FILE_APPEND
+    );
 }

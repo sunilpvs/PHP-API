@@ -82,4 +82,17 @@ try {
 
     
 } catch (Exception $e) {
+    // Log the exception message
+    if (isset($logger)) {
+        $logger->log("Exception in ReactivateCron: " . $e->getMessage(), [], 'cron');
+    } else {
+        error_log("Exception in ReactivateCron: " . $e->getMessage());
+    }
+
+    // Additionally, write to a separate log file if logger is not available
+    file_put_contents(
+        __DIR__ . '/ReactivateCronError.log',
+        "[" . date('Y-m-d H:i:s') . "] " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n\n",
+        FILE_APPEND
+    );
 }

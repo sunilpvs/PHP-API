@@ -642,7 +642,7 @@ class Rfq
 
     public function getExpiredRfqs()
     {
-        $query = 'SELECT r.id, v.vendor_code, v.vendor_id, r.user_id, r.reference_id FROM vms_rfqs r 
+        $query = 'SELECT r.id, v.vendor_code, r.vendor_id, r.user_id, r.reference_id FROM vms_rfqs r 
                     JOIN vms_vendor v ON r.vendor_id = v.id
                     WHERE status = 15';
         $this->logger->logQuery($query, [], 'classes');
