@@ -140,28 +140,19 @@ class RfqReview
 
         // Update RFQ status to verified - under review
         $query = "UPDATE vms_rfqs SET 
-                    status = ?
+                    status = ?,
+                    expiry_date = ?
                     WHERE reference_id = ?";
 
         $params = [
             9,
+            $expiry_date,
             $reference_id
         ];
 
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $logMessage = 'RFQ verified and forwarded for approval';
         $rfqStatusUpdatedId =  $this->conn->update($query, $params, $logMessage);
-
-        // set expiry date in vms_rfqs table after verification
-        $query = "UPDATE vms_rfqs SET 
-                    expiry_date = ?
-                    WHERE reference_id = ?";
-        $params = [
-            $expiry_date,
-            $reference_id
-        ];
-        $this->logger->logQuery($query, $params, 'classes', $module, $username);
-        $expiryDateUpdatedId = $this->conn->update($query, $params, 'Vendor expiry date set');
 
         $vendorEmail = $this->rfqData->getEmailByReferenceId($reference_id, $module, $username);
 
@@ -187,7 +178,7 @@ class RfqReview
             bcc: $vmsAdminEmails,
             attachments: []
         );
-        if ($rfqStatusUpdatedId && $emailSent && $expiryDateUpdatedId) {
+        if ($rfqStatusUpdatedId && $emailSent) {
             return true;
         } else {
             return false;
@@ -200,6 +191,7 @@ class RfqReview
     public function approveRfq($reference_id, $expiry_date, $module, $username)
     {
         $existingVendor = $this->rfqData->isExistingVendor($reference_id, $module, $username);
+        
         if ($existingVendor) {
             // activate existing vendor
             return $this->activateVendorByReferenceId($reference_id, $expiry_date, $module, $username);
@@ -211,6 +203,8 @@ class RfqReview
 
 
     // activate existing vendor
+
+    // REVIEW
     public function activateVendorByReferenceId($reference_id, $expiry_date, $module, $username)
     {
         // set expiry date after approval 
@@ -301,16 +295,6 @@ class RfqReview
     // approve new rfq
     public function approveNewRfq($reference_id, $expiry_date, $module, $username)
     {
-        // set expiry date after approval 
-        $query = "UPDATE vms_rfqs SET 
-                    expiry_date = ?
-                    WHERE reference_id = ?";
-        $params = [
-            $expiry_date,
-            $reference_id
-        ];
-        $this->logger->logQuery($query, $params, 'classes', $module, $username);
-        $expiryDateUpdatedId = $this->conn->update($query, $params, 'Vendor expiry date set');
 
         // generate vendor id 
         $vendorCode = $this->counterPartyInfo->generateVendorCode($reference_id, $module, $username);
@@ -321,10 +305,11 @@ class RfqReview
         $entity_id = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
 
         // insert a new record in vms_vendor with vendor code and status approved
-        $query = "INSERT INTO vms_vendor (vendor_code, vendor_status) VALUES (?, ?)";
+        $query = "INSERT INTO vms_vendor (vendor_code, vendor_status, entity_id) VALUES (?, ?, ?)";
         $params = [
             $vendorCode,
-            11  // approved
+            11,  // approved
+            $entity_id
         ];
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $vendorCodeAndStatusUpdatedId = $this->conn->update($query, $params, 'Vendor approved and Vendor ID generated');
@@ -393,7 +378,7 @@ class RfqReview
 
         if (
             $vendorCodeAndStatusUpdatedId && $rfqVendorCodeUpdatedId &&
-            $vendorStatusUpdatedId && $expiryDateUpdatedId && $emailSent
+            $vendorStatusUpdatedId && $emailSent
         ) {
             return true;
         } else {

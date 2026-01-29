@@ -77,7 +77,7 @@ class Documents {
                     d.file_path,
                     d.uploaded_at
                   FROM vms_documents d
-                  LEFT JOIN vms_vendor v ON d.reference_id = v.reference_id
+                  LEFT JOIN vms_rfqs v ON d.reference_id = v.reference_id
                   ORDER BY d.uploaded_at DESC
                   LIMIT $limit OFFSET $offset";
 

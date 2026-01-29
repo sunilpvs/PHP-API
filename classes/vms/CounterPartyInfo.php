@@ -578,16 +578,15 @@ class CounterPartyInfo
     public function generateVendorCode($referenceId, $module, $username)
     {
         // $entityCode = $this->getEntityByReferenceId($referenceId, $module, $username);
-        $vendorCodePrefix = "VNDR";
-        $stateCode = $this->getStateByReferenceId($referenceId, $module, $username);
+        $vendorCodePrefix = "SCG";
         $financialYear = $this->getCurrentFinancialYear();
 
-        if (!$vendorCodePrefix || !$stateCode) {
+        if (!$vendorCodePrefix) {
             $this->logger->log("Cannot generate Vendor Code: Missing Entity Code or State Code for Reference ID $referenceId");
             return null;
         }
 
-        $prefix = "{$vendorCodePrefix}/{$stateCode}/{$financialYear}/";
+        $prefix = "{$vendorCodePrefix}/{$financialYear}/";
 
         $query = "SELECT COUNT(*) AS count FROM vms_vendor WHERE vendor_code LIKE ?";
         $likePattern = $prefix . '%';

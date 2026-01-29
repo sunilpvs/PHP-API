@@ -38,6 +38,9 @@ switch ($method) {
     case 'GET':
         $logger->log("GET request received");
 
+        // never show all documents because vendor needs his own documents only 
+        // and vms users can see by reference_id
+
         if (isset($_GET['id'])) {
             $docId = intval($_GET['id']);
             $data = $docOb->getDocumentById($docId, $module, $username);
@@ -58,22 +61,10 @@ switch ($method) {
             break;
         }
 
-        // Paginated documents response
-        $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
-        $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
-        $offset = ($page - 1) * $limit;
+        // If no specific parameter, show error (as we don't want to expose all documents)
+        $response = ["error" => "Reference ID is required to fetch documents"];
 
-        $data = $docOb->getPaginatedDocuments($offset, $limit, $module, $username);
-        $total = $docOb->getDocumentsCount($module, $username);
-
-        $response = [
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-            'documents' => $data,
-        ];
-
-        http_response_code(200);
+        http_response_code(400);
         echo json_encode($response);
         $logger->logRequestAndResponse($_GET, $response);
         break;
