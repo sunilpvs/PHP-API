@@ -635,7 +635,10 @@ class Rfq
 
     public function getExpiredRfqsByDate()
     {
-        $query = 'SELECT id, reference_id FROM vms_rfqs WHERE expiry_date IS NOT NULL AND expiry_date < CURDATE() AND status = 11';
+        $query = 'SELECT r.id, v.vendor_code, r.reference_id FROM vms_rfqs r
+                    JOIN vms_vendor v ON r.vendor_id = v.id
+                    WHERE expiry_date IS NOT NULL 
+                    AND expiry_date < CURDATE() AND status = 11';
         $this->logger->logQuery($query, [], 'classes');
         $result = $this->conn->runQuery($query);
         return $result;

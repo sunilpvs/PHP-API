@@ -6,6 +6,34 @@ require_once __DIR__ . '/../../vms/Rfq.php';
 require_once __DIR__ . '/../../../classes/Logger.php';
 require_once __DIR__ . '/../GraphAutoMailer.php';
 
+// Protect against unauthorized execution
+$configPath = __DIR__ . '/../../../app.ini';
+if (!file_exists($configPath)) {
+    http_response_code(500);
+    echo json_encode(['status' => 500, 'message' => 'Config file not found']);
+    exit;
+}
+
+$config = parse_ini_file($configPath, true);
+if (!$config) {
+    http_response_code(500);
+    echo json_encode(['status' => 500, 'message' => 'Failed to parse config']);
+    exit;
+}
+
+$cronSecret = trim($config['cron']['SECRET'] ?? '');
+$isCli = (php_sapi_name() === 'cli');
+$requestSecret = trim($_GET['key'] ?? ($_SERVER['HTTP_X_CRON_KEY'] ?? ''));
+
+if (!$isCli && (empty($cronSecret) || !hash_equals($cronSecret, $requestSecret))) {
+    http_response_code(403);
+    echo json_encode([
+        'status' => 403,
+        'message' => 'Forbidden - Missing cron secret key',
+    ]);
+    exit;
+}
+
 
 try {
     $db = new DbController();
@@ -44,7 +72,7 @@ try {
 
         $mailer = new AutoMail();
         $keyValueData = [
-            "Message" => "Your Vendor ID has expired as of " . date('Y-m-d') . ". Please contact the VMS Team for further details.",
+            "Message" => "Your Vendor ID - " . $rfq['vendor_code'] . " has expired as of " . date('Y-m-d') . ". Please contact the VMS Team for further details.",
             "Reference ID" => $rfq['reference_id'],
             // "Comments" => $commentText
         ];
@@ -58,7 +86,6 @@ try {
             to: [$rfqVendorEmail],
             bcc: $vmsAdminEmails,
         );
-        //echo "RFQ ID $rfqId expired. Email sent to $rfqVendorEmail: " . ($emailSent ? 'Success' : 'Failed') . "\n";
     }
     
 } catch (Exception $e) {
