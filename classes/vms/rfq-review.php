@@ -305,7 +305,7 @@ class RfqReview
         $entity_id = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
 
         // insert a new record in vms_vendor with vendor code and status approved
-        $query = "INSERT INTO vms_vendor (vendor_code, vendor_status, vendor_id) VALUES (?, ?, ?)";
+        $query = "INSERT INTO vms_vendor (vendor_code, vendor_status, entity_id) VALUES (?, ?, ?)";
         $params = [
             $vendorCode,
             11,  // approved
