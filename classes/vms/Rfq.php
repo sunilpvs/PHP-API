@@ -98,13 +98,6 @@ class Rfq
     {
         //Generating Reference ID
         $reference_id = $this->generateReferenceId();
-        // Inserting RFQ data.
-        $query = "INSERT INTO vms_rfqs (reference_id, vendor_name, contact_name, email, mobile, entity_id, status, email_sent, created_by)
-                  VALUES (?, ?, ?, ?, ?, ?, 7, false, ?)";
-        $params = [$reference_id, $vendor_name, $contact_name, $email, $mobile, $entity_id, $created_by];
-        $this->logger->logQuery($query, $params, 'classes', $module, $username);
-        $logMessage = 'RFQ Inserted';
-        $insertId = $this->conn->insert($query, $params, $logMessage);
 
         //Create Vendaor Contact using Name, Email and Mobile
         //insert into tbl_contact  contact type = vendor , name = name, email, mobile
@@ -130,6 +123,14 @@ class Rfq
         $params = [$userId, $email, 4, 8, 1]; // Assuming module_id 4 is for VMS and user_role_id 8 is for VMS_VENDOR
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $moduleId = $this->conn->insert($query, $params, 'Vendor user module access created');
+
+         // Inserting RFQ data.
+        $query = "INSERT INTO vms_rfqs (reference_id, vendor_name, contact_name, email, mobile, entity_id, status, user_id, email_sent, created_by)
+                  VALUES (?, ?, ?, ?, ?, ?, 7, ?, false, ?)";
+        $params = [$reference_id, $vendor_name, $contact_name, $email, $mobile, $entity_id, $userId, $created_by];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        $logMessage = 'RFQ Inserted';
+        $insertId = $this->conn->insert($query, $params, $logMessage);
 
         //Sending Email notification to Vendor with login details.
 
