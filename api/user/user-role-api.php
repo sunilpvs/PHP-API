@@ -23,7 +23,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 $userObj = new UserRole();
 $auth = new UserLogin();
-$username = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 'guest';
+$username = $auth->getEmailFromJWT() ? $auth->getEmailFromJWT() : 'guest';
 // $username = 'guest';
 $module = 'Admin';
 
