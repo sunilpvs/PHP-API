@@ -1,6 +1,6 @@
 <?php
-require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
+require_once __DIR__. '/../DbController.php';
+require_once __DIR__. '/../Logger.php';
 
 class Entity {
     private $conn;
@@ -8,9 +8,9 @@ class Entity {
 
     public function __construct() {
         $this->conn = new DBController();
-        $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
+        $config = parse_ini_file(__DIR__ . '/../../app.ini');
         $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
-        $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
+        $logDir = __DIR__ . '/../../logs';
         $this->logger = new Logger($debugMode, $logDir);
     }
 
