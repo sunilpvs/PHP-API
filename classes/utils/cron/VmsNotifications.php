@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../../vms/Rfq.php';
 require_once __DIR__ . '/../../../classes/Logger.php';
 require_once __DIR__ . '/../GraphAutoMailer.php';
+require_once __DIR__ . '/../../../classes/admin/Entity.php';
 
 // Protect against unauthorized execution
 $configPath = __DIR__ . '/../../../app.ini';
@@ -35,15 +36,16 @@ if (!$isCli && (empty($cronSecret) || !hash_equals($cronSecret, $requestSecret))
 
 
 try {
+    $entityOb = new Entity();
     $rfqObj = new Rfq();
     $config = parse_ini_file(__DIR__ . '/../../../app.ini');
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 
     $logger = new Logger($debugMode, __DIR__ . '/../../../logs');
-   
+
     // Loop through each notification interval
     $daysArray = [60, 45, 30, 15, 7, 3, 1];
-    
+
     foreach ($daysArray as $days) {
         $rfqsToNotify = $rfqObj->getRfqsByDays($days); // get RFQs expiring in $days
 
@@ -65,17 +67,23 @@ try {
 
                 $vmsAdminEmails = $rfqObj->getVmsAdminEmails('cron', 'system');
 
+                $entityName = $rfqObj->getEntityNameByReferenceId($rfq['reference_id'], 'cron', 'system');
+                $RfqEntityId = $rfqObj->getEntityIdByReferenceId($rfq['reference_id'], 'cron', 'system');
+                $salutationName = $entityOb->getSalutationNameByEntityId($RfqEntityId, 'cron', 'system');
+
                 $mailer = new AutoMail();
                 $keyValueData = [
-                    "Message" => "Your Vendor ID is set to expire in " . $days . " days on " . $expiryDate . ". Please take necessary actions to renew your Vendor ID.",
+                    "Message" => "Your Vendor ID - " . $vendorCode . " under " . $entityName . " is set to expire in " . $days . " days on " . $expiryDate . ". Please take necessary actions to renew your Vendor ID.",
                     "Reference ID" => $rfq['reference_id'],
                 ];
+
+
 
                 // Prepare email data and send email using the mailer
                 $emailSent = $mailer->sendInfoEmail(
                     subject: 'Vendor Expiry Notification - Reference ID: ' . $rfq['reference_id'],
                     greetings: 'Dear Vendor,',
-                    name: 'Shrichandra Group Team',
+                    name: $salutationName ? $salutationName : 'Shrichandra Group Team',
                     keyValueArray: $keyValueData,
                     to: [$vendorEmail],
                     bcc: $vmsAdminEmails,
@@ -93,9 +101,7 @@ try {
             }
         }
     }
-}
-    
- catch (Exception $e) {
+} catch (Exception $e) {
     $logger->log("Error in VmsNotifications Cron: " . $e->getMessage(), 'ERROR', 'cron');
 
     // Additionally, write to a separate log file if logger is not available

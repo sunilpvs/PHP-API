@@ -18,18 +18,18 @@ class UserLogin
         $this->conn = new DBController();
         $this->jwt = new JWTHandler();
         $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
-        $logDir = __DIR__. '/../logs';
+        $logDir = __DIR__ . '/../logs';
         $this->logger = new Logger($debugMode, $logDir);
     }
 
-    function validateUserLogin($username, $password)
+    function validateUserLogin($username, $password, $entity_id)
     {
         $sql = "SELECT a.id, a.user_name, a.password, a.code, a.status, b.f_name , b.l_name, a.email, b.mobile, c.Name as ctype, d.user_role, a.entity_id ";
         $sql .= "FROM tbl_users a, tbl_contact b, tbl_contacttype c, tbl_user_role d ";
         $sql .= " WHERE a.contact_Id = b.Id AND b.contacttype_Id = c.id AND a.user_status = 1";
-        $sql .= " AND (a.user_name = ? OR a.email = ?) LIMIT 1";
+        $sql .= " AND (a.user_name = ? OR a.email = ?) AND a.entity_id = ? LIMIT 1";
         // Run the query using the DBController's runSingle method
-        $result = $this->conn->runSingle($sql, [$username, $username]);
+        $result = $this->conn->runSingle($sql, [$username, $username, $entity_id]);
 
         if (!$result) {
             // User not found
@@ -175,18 +175,19 @@ class UserLogin
         }
     }
 
-    function initiateForgotPassword($userId, $token, $expiryMinutes)
+    function initiateForgotPassword($userId, $entityId, $token, $expiryMinutes)
     {
         $query = 'UPDATE tbl_password_resets
                     SET used_at = NOW()
                     WHERE user_id = ?
+                    AND entity_id = ?
                     AND used_at IS NULL';
-        $params = [$userId];
+        $params = [$userId, $entityId];
         $this->logger->logQuery($query, $params, 'Invalidate Previous Password Reset Tokens');
         $this->conn->update($query, $params);
 
-        $query = 'INSERT INTO tbl_password_resets(user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))';
-        $params = [$userId, hash('sha256', $token), $expiryMinutes];
+        $query = 'INSERT INTO tbl_password_resets(user_id, entity_id, token_hash, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))';
+        $params = [$userId, $entityId, hash('sha256', $token), $expiryMinutes];
         $this->logger->logQuery($query, $params, 'Initiate Forgot Password');
         $result = $this->conn->insert($query, $params);
         if ($result > 0) {
@@ -195,11 +196,11 @@ class UserLogin
         return false;
     }
 
-    function changePassword($userId, $newPassword, $resetRecordId)
+    function changePassword($userId, $entityId, $newPassword, $resetRecordId)
     {
         $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
-        $query = "UPDATE tbl_users SET password = ? WHERE id = ?";
-        $params = [$hashedPassword, $userId];
+        $query = "UPDATE tbl_users SET password = ? WHERE id = ? AND entity_id = ?";
+        $params = [$hashedPassword, $userId, $entityId];
         $this->logger->logQuery($query, $params, 'Change Password');
         $changePasswordResult = $this->conn->update($query, $params);
 
@@ -217,20 +218,19 @@ class UserLogin
         return false;
     }
 
-    function getValidPasswordResetRecord($userId, $token)
+    function getValidPasswordResetRecord($userId, $entityId, $token)
     {
         $tokenHash = hash('sha256', $token);
 
-        $query = "
-        SELECT id
-        FROM tbl_password_resets
-        WHERE user_id = ?
-          AND token_hash = ?
-          AND used_at IS NULL
-          AND expires_at > NOW()
-        LIMIT 1
-    ";
+        $query = "SELECT id
+                    FROM tbl_password_resets
+                    WHERE user_id = ?
+                    AND entity_id = ?
+                    AND token_hash = ?
+                    AND used_at IS NULL
+                    AND expires_at > NOW()
+                    LIMIT 1";
 
-        return $this->conn->runSingle($query, [$userId, $tokenHash]);
+        return $this->conn->runSingle($query, [$userId, $entityId, $tokenHash]);
     }
 }

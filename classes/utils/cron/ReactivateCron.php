@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../DbController.php';
 require_once __DIR__ . '/../../vms/Rfq.php';
 require_once __DIR__ . '/../../../classes/Logger.php';
 require_once __DIR__ . '/../GraphAutoMailer.php';
+require_once __DIR__ . '/../../../classes/admin/Entity.php';
 
 // Protect against unauthorized execution
 $configPath = __DIR__ . '/../../../app.ini';
@@ -37,6 +38,7 @@ if (!$isCli && (empty($cronSecret) || !hash_equals($cronSecret, $requestSecret))
 try {
     $db = new DbController();
     $rfqObj = new Rfq();
+    $entityOb = new Entity();
     $config = parse_ini_file(__DIR__ . '/../../../app.ini');
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 
@@ -77,9 +79,13 @@ try {
             continue;
         }
 
+        $entityName = $rfqObj->getEntityNameByVendorCode($vendorCode, 'cron', 'system');
+        $RfqEntityId = $rfqObj->getEntityIdByVendorCode($vendorCode, 'cron', 'system');
+        $salutationName = $entityOb->getSalutationNameByEntityId($RfqEntityId, 'cron', 'system');
+
         $mailer = new AutoMail();
         $keyValueData = [
-            "Message" => "Your Vendor ID has been activated as of " . date('Y-m-d') . ". Your new RFQ details are as follows. 
+            "Message" => "Your Vendor ID - " . $vendorCode . " under " . $entityName . " has been activated as of " . date('Y-m-d') . ". Your new RFQ details are as follows. 
                         Please contact the VMS Team for further details.",
             "New Reference ID" => $activeRfq['reference_id'],
             "Vendor Code" => $vendorCode,
@@ -91,7 +97,7 @@ try {
         $emailSent = $mailer->sendInfoEmail(
             subject: 'Vendor Activated - Reference ID: ' . $activeRfq['reference_id'],
             greetings: 'Dear Vendor,',
-            name: 'Pvs Consultancy Services',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$activeRfqVendorEmail],
             bcc: $vmsAdminEmails,

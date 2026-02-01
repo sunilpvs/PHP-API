@@ -4,10 +4,11 @@ use Dotenv\Dotenv;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/vms/Rfq.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/GraphAutoMailer.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/vms/Rfq.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/vms/CounterPartyInfo.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/vms/Comments.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/admin/Entity.php';
 
 class RfqReview
 {
@@ -20,6 +21,7 @@ class RfqReview
     private $commentOb;
     private $vendorLoginUrl;
     private $vmsPortalUrl;
+    private $entityOb;
     private $env;
     private $dotenv;
 
@@ -33,6 +35,7 @@ class RfqReview
         $this->counterPartyInfo = new CounterPartyInfo();
         $this->commentOb = new Comments();
         $this->logger = new Logger($debugMode, $logDir);
+        $this->entityOb = new Entity();
 
         // load environment variables
         $this->env = getenv('APP_ENV') ?: 'local';
@@ -63,24 +66,15 @@ class RfqReview
         $logMessage = 'RFQ sent back for corrections';
         $updatedRfqId =  $this->conn->update($query, $params, $logMessage);
 
-        // update vms_vendor status to sent back for corrections
-        // $query = "UPDATE vms_vendor SET 
-        //             vendor_status = ?
-        //             WHERE reference_id = ?";
-
-        // $params = [
-        //     10,
-        //     $reference_id
-        // ];
-
-        // $this->logger->logQuery($query, $params, 'classes', $module, $username);
-        // $logMessage = 'Vendor status updated to sent back for corrections';
-        // $updatedVendorId =  $this->conn->update($query, $params, $logMessage);
-
         // get latest comments for the reference id
         $comments = $this->commentOb->getLatestCommentsByReferenceId($reference_id, $module, $username);
 
         $vendorEmail = $this->rfqData->getEmailByReferenceId($reference_id, $module, $username);
+
+
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
 
         $commentText = "";
 
@@ -99,11 +93,9 @@ class RfqReview
 
         $mailer = new AutoMail();
 
-
-
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your RFQ with Reference ID: $reference_id has been sent back for corrections. 
+            "Message" => "Your RFQ with Reference ID: $reference_id under $entityName has been sent back for corrections. 
                             Please review the comments and make the necessary changes.",
             "Reference ID" => $reference_id,
             "Comments" => $commentText
@@ -114,7 +106,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: 'Returned for Revisions - RFQ Reference ID: ' . $reference_id,
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [], // remove this in production
@@ -158,11 +150,15 @@ class RfqReview
 
         $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
 
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         $mailer = new AutoMail();
 
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your RFQ with Reference ID: $reference_id has been verified and forwarded for approval. 
+            "Message" => "Your RFQ with Reference ID: $reference_id under $entityName has been verified and forwarded for approval. 
                             You will be notified once the approval process is complete.",
             "Reference ID" => $reference_id,
         ];
@@ -171,7 +167,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: 'RFQ Verification Completed – Awaiting Approval',
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [], // remove this in production
@@ -191,7 +187,7 @@ class RfqReview
     public function approveRfq($reference_id, $expiry_date, $module, $username)
     {
         $existingVendor = $this->rfqData->isExistingVendor($reference_id, $module, $username);
-        
+
         if ($existingVendor) {
             // activate existing vendor
             return $this->activateVendorByReferenceId($reference_id, $expiry_date, $module, $username);
@@ -261,11 +257,15 @@ class RfqReview
 
         $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
 
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
 
         $mailer = new AutoMail();
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your RFQ with Reference ID: $reference_id has been approved. 
+            "Message" => "Your RFQ with Reference ID: $reference_id under $entityName has been approved. 
                             Your Vendor ID is: " . $vendor_code . ". You can now proceed with further transactions.",
             "Reference ID" => $reference_id,
             "Vendor Code" => $vendor_code
@@ -274,7 +274,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: 'RFQ Approval and Vendor ID Issued',
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [], // remove this in production
@@ -355,10 +355,14 @@ class RfqReview
 
         $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
 
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         $mailer = new AutoMail();
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Congratulations! Your RFQ with Reference ID: $reference_id has been approved. 
+            "Message" => "Congratulations! Your RFQ with Reference ID: $reference_id under $entityName has been approved. 
                             Your Vendor ID is: $vendorCode. You can now proceed with further transactions.",
             "Reference ID" => $reference_id,
             "Vendor Code" => $vendorCode
@@ -368,7 +372,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: 'RFQ Approval and Vendor ID Issued',
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [],
@@ -440,11 +444,16 @@ class RfqReview
 
         $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
 
+
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         $mailer = new AutoMail();
 
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "We regret to inform you that your RFQ with Reference ID: $reference_id has been rejected. 
+            "Message" => "We regret to inform you that your RFQ with Reference ID: $reference_id under $entityName has been rejected. 
                             For further details, please contact our support team.",
             "Reference ID" => $reference_id,
         ];
@@ -453,7 +462,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: "RFQ - $reference_id Rejected",
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [],
@@ -495,9 +504,13 @@ class RfqReview
             // send mail notification to vendor
             $mailer = new AutoMail();
 
+            $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+            $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+            $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
 
             $keyValueData = [
-                "Message" => "Dear Vendor, Your data has been successfully resubmitted with Reference ID: $reference_id. 
+                "Message" => "Dear Vendor, Your data has been successfully resubmitted with Reference ID: $reference_id
+                                under $entityName. 
                             You will be notified once your application is reviewed. You can also check your status by logging
                             into the Vendor Portal with the credentials shared earlier. ",
                 "Vendor Portal Link" => $this->vendorLoginUrl,
@@ -506,7 +519,7 @@ class RfqReview
             $emailSent = $mailer->sendInfoEmail(
                 subject: 'Vendor Registration Resubmitted - Reference ID: ' . $reference_id,
                 greetings: 'Dear Vendor,',
-                name: 'Shrichandra Group Team',
+                name: $salutationName ? $salutationName : 'Shrichandra Group Team',
                 keyValueArray: $keyValueData,
                 to: [$vendorEmail],
                 cc: [],
@@ -522,6 +535,11 @@ class RfqReview
             $this->logger->log("First time submission for Reference ID: $reference_id by user: $username", 'classes', $module, $username);
             // update rfq and vendor status to 'Submitted' (status id 8)
             $submissionStatusChanged = $this->submitRfqStatusChange($reference_id, $module, $username);
+
+            $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+            $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+            $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
             // send mail notification to vendor
             $mailer = new AutoMail();
             $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
@@ -529,7 +547,7 @@ class RfqReview
             // Send notification email to vendor
             // Create the key-value array for the email body to vendor
             $keyValueData = [
-                "Message" => "Dear Vendor, Your data has been successfully submitted with Reference ID: $reference_id. 
+                "Message" => "Dear Vendor, Your data has been successfully submitted with Reference ID: $reference_id under $entityName. 
                             You will be notified once your application is reviewed. You can also check your status by logging
                             into the Vendor Portal with the credentials shared earlier. ",
                 "Vendor Portal Link" => $this->vendorLoginUrl,
@@ -538,7 +556,7 @@ class RfqReview
             $emailSent = $mailer->sendInfoEmail(
                 subject: 'Vendor Registration Submitted - Reference ID: ' . $reference_id,
                 greetings: 'Dear Vendor,',
-                name: 'Shrichandra Group Team',
+                name: $salutationName ? $salutationName : 'Shrichandra Group Team',
                 keyValueArray: $keyValueData,
                 to: [$vendorEmail],
                 cc: [],
@@ -571,13 +589,17 @@ class RfqReview
 
         $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
 
+        $RfqEntityId = $this->rfqData->getEntityIdByVendorCode($vendor_code, $module, $username);
+        $entityName = $this->rfqData->getEntityNameByVendorCode($vendor_code, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         // send a mail to vendor about blocking
         $mailer = new AutoMail();
         // get mail id from vendor code
         $vendorEmail = $this->rfqData->getEmailByVendorCode($vendor_code, $module, $username);
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your vendor account with Vendor Code: $vendor_code has been blocked. 
+            "Message" => "Your vendor account with Vendor Code: $vendor_code has been blocked under $entityName. 
                             For further details, please contact our support team.",
             "Vendor Code" => $vendor_code,
         ];
@@ -585,7 +607,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: "Vendor Account - $vendor_code Blocked",
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team', 
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [],
@@ -621,22 +643,26 @@ class RfqReview
 
         $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
 
+        $entityName = $this->rfqData->getEntityNameByVendorCode($vendor_code, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByVendorCode($vendor_code, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         // send a mail to vendor about suspension
         $mailer = new AutoMail();
         // get mail id from vendor code
         $vendorEmail = $this->rfqData->getEmailByVendorCode($vendor_code, $module, $username);
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your vendor account with Vendor Code: $vendor_code has been suspended. 
+            "Message" => "Your vendor account with Vendor Code: $vendor_code has been suspended under $entityName. 
                             For further details, please contact our support team.",
             "Vendor Code" => $vendor_code,
         ];
         // Prepare email data and send email using the mailer
         $emailSent = $mailer->sendInfoEmail(
-        subject: "Vendor Account - $vendor_code Suspended",
+            subject: "Vendor Account - $vendor_code Suspended",
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',    
             keyValueArray: $keyValueData,
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             to: [$vendorEmail],
             cc: [],
             bcc: $vmsAdminEmails,
@@ -670,11 +696,16 @@ class RfqReview
 
         // send a mail to vendor about activation
         $mailer = new AutoMail();
+
+        $entityName = $this->rfqData->getEntityNameByVendorCode($vendor_code, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByVendorCode($vendor_code, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         // get mail id from vendor code
         $vendorEmail = $this->rfqData->getEmailByVendorCode($vendor_code, $module, $username);
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your vendor account with Vendor Code: $vendor_code has been activated. 
+            "Message" => "Your vendor account with Vendor Code: $vendor_code has been activated under $entityName. 
                             You can now proceed with further transactions.",
             "Vendor Code" => $vendor_code,
         ];
@@ -682,7 +713,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: "Vendor Account - $vendor_code Activated",
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendorEmail],
             cc: [],
@@ -714,42 +745,14 @@ class RfqReview
             return false; // No active reference ID found
         }
 
-        // no affect to vendor status 
-        // $query = "UPDATE vms_vendor SET 
-        //             vendor_status = ?,
-        //             active_rfq = ?
-        //             WHERE vendor_code = ?";
-
-        // $params = [
-        //     15, // expired but shown as reinitiated in UI
-        //     null,
-        //     $vendor_code
-        // ];
-        // $this->logger->logQuery($query, $params, 'classes', $module, $username);
-        // $vendorStatusUpdatedId =  $this->conn->update($query, $params, 'Vendor reinitiated');
-        // if (!$vendorStatusUpdatedId) {
-        //     return false; // Vendor status update failed
-        // }
-
-        // no affect to previous rfq - it will expire automatically based on expiry date
-        // $query = "UPDATE vms_rfqs SET 
-        //             is_active = ?,
-        //             status = ?
-        //             WHERE reference_id = ?";
-
-        // $params = [
-        //     0,
-        //     15,
-        //     $reference_id
-        // ];
-
-        // $this->logger->logQuery($query, $params, 'classes', $module, $username);
-        // $logMessage = 'Vendor reinitiated';
-        // $vendorStatusUpdatedId =  $this->conn->update($query, $params, $logMessage);
-
+        // get entity id from reference id
+        $query = "SELECT entity_id FROM vms_rfqs WHERE reference_id = ?";
+        $this->logger->logQuery($query, [$reference_id], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$reference_id]);
+        $entity_id = $result['entity_id'] ?? null;
 
         // create new rfq with same details as previous rfq for reinitiation
-        $newReferenceId = $this->rfqData->generateReferenceId();
+        $newReferenceId = $this->rfqData->generateReferenceId($entity_id);
         $query = "INSERT INTO vms_rfqs (
                 reference_id,
                 vendor_id,
@@ -835,11 +838,15 @@ class RfqReview
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $newCounterpartyInsertionId = $this->conn->insert($query, $params, 'Counterparty details copied to new RFQ');
 
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
         // send notification email to vendor
         $mailer = new AutoMail();
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Dear Vendor, Your registration has been reinitiated. 
+            "Message" => "Dear Vendor, Your registration has been reinitiated under $entityName. 
                         Please complete the submission process using the new Reference ID: $newReferenceId. 
                         You can log in to the Vendor Portal using your existing credentials.",
             "New Reference ID" => $newReferenceId,
@@ -854,7 +861,7 @@ class RfqReview
         $emailSent = $mailer->sendInfoEmail(
             subject: 'Vendor Registration Reinitiated - New Reference ID: ' . $newReferenceId,
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$vendor_email],
             cc: [],

@@ -574,19 +574,19 @@ class CounterPartyInfo
         }
     }
 
-    // Vendor Code Format : <EntityCode>-<StateCode>-<FinancialYear>-<4DigitSerialNo>
+    // Vendor Code Format : <EntityCode>-<FinancialYear>-<5DigitSerialNo>
+    // Example: SCBC/23-24/00001
     public function generateVendorCode($referenceId, $module, $username)
     {
-        // $entityCode = $this->getEntityByReferenceId($referenceId, $module, $username);
-        $vendorCodePrefix = "SCG";
+        $entityCode = $this->getEntityByReferenceId($referenceId, $module, $username);
         $financialYear = $this->getCurrentFinancialYear();
 
-        if (!$vendorCodePrefix) {
-            $this->logger->log("Cannot generate Vendor Code: Missing Entity Code or State Code for Reference ID $referenceId");
+        if (!$entityCode) {
+            $this->logger->log("Cannot generate Vendor Code: Missing Entity Code for Reference ID $referenceId");
             return null;
         }
 
-        $prefix = "{$vendorCodePrefix}/{$financialYear}/";
+        $prefix = "{$entityCode}/{$financialYear}/";
 
         $query = "SELECT COUNT(*) AS count FROM vms_vendor WHERE vendor_code LIKE ?";
         $likePattern = $prefix . '%';
@@ -594,7 +594,7 @@ class CounterPartyInfo
         $result = $this->conn->runSingle($query, [$likePattern]);
         $count = isset($result['count']) ? (int)$result['count'] : 0;
 
-        $serialNumber = str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        $serialNumber = str_pad($count + 1, 5, '0', STR_PAD_LEFT);
         return $prefix . $serialNumber;
     }
 }

@@ -20,6 +20,7 @@ class Entity {
                         e.entity_name,
                         e.cin,
                         e.incorp_date,
+                        e.salutation_name as salutation,
                         c.city,
                         d.state, 
                         e.status AS status_id,
@@ -42,6 +43,7 @@ class Entity {
                         e.entity_name,
                         e.cin,
                         e.incorp_date,
+                        e.salutation_name as salutation,
                         c.city,
                         d.state, 
                         e.status AS status_id,
@@ -70,6 +72,7 @@ class Entity {
                         e.entity_name,
                         e.cin,
                         e.incorp_date,
+                        e.salutation_name as salutation,
                         e.status AS status_id,
                         s.status AS status
                   FROM tbl_entity e
@@ -79,11 +82,17 @@ class Entity {
         return $this->conn->runSingle($query, [$id]);
     }
 
-    public function addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact,  $status, $module, $username) {
-        $query = 'INSERT INTO tbl_entity (entity_name, cin, incorp_date, status) VALUES (?, ?, ?, ?)';
-        $this->logger->logQuery($query, [$entity_name, $cin, $incorp_date, $status], 'classes', $module, $username);
+    public function getEntityCombo($module, $username) {
+        $query = 'SELECT id, entity_name FROM tbl_entity ORDER BY entity_name ASC';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        return $this->conn->runQuery($query);
+    }
+
+    public function addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact,  $salutation_name, $status, $module, $username) {
+        $query = 'INSERT INTO tbl_entity (entity_name, cin, incorp_date, salutation_name, status) VALUES (?, ?, ?, ?, ?)';
+        $this->logger->logQuery($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status], 'classes', $module, $username);
         $logMessage = 'Entity Inserted ';
-        $entityId =  $this->conn->insert($query, [$entity_name, $cin, $incorp_date, $status], $logMessage);
+        $entityId =  $this->conn->insert($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status], $logMessage);
 
         $cc_type=1; // Head-Office
 
@@ -100,11 +109,11 @@ class Entity {
         return false;
     }
 
-    public function updateEntity($entity_name, $cin, $incorp_date, $status, $id, $module, $username) {
-        $query = 'UPDATE tbl_entity SET entity_name = ?, cin = ?, incorp_date = ?, status = ? WHERE id = ?';
-        $this->logger->logQuery($query, [$entity_name, $cin, $incorp_date, $status, $id], 'classes', $module, $username);
+    public function updateEntity($entity_name, $cin, $incorp_date, $salutation_name, $status, $id, $module, $username) {
+        $query = 'UPDATE tbl_entity SET entity_name = ?, cin = ?, incorp_date = ?, salutation_name = ?, status = ? WHERE id = ?';
+        $this->logger->logQuery($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status, $id], 'classes', $module, $username);
         $logMessage = 'Entity Updated ';
-        return $this->conn->update($query, [$entity_name, $cin, $incorp_date, $status, $id], $logMessage);
+        return $this->conn->update($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status, $id], $logMessage);
     }
 
     public function deleteEntity($id, $module, $username) {
@@ -146,6 +155,13 @@ class Entity {
         $this->logger->logQuery($query, [$cin, $id], 'classes');
         $duplicate = $this->conn->runSingle($query, [$cin, $id]);
         return !empty($duplicate);
+    }
+
+    public function getSalutationNameByEntityId($entity_id, $module, $username) {
+        $query = 'SELECT salutation_name FROM tbl_entity WHERE id = ?';
+        $this->logger->logQuery($query, [$entity_id], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$entity_id]);
+        return $result ? $result['salutation_name'] : null;
     }
 }
 ?>

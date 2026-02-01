@@ -146,7 +146,7 @@ switch ($method) {
             }
         }
 
-        if ($rfqOb->checkDuplicateRfq($input['vendor_name'], $input['email'], $input['mobile'])) {
+        if ($rfqOb->checkDuplicateRfq($input['vendor_name'], $input['email'], $input['mobile'], $input['entity_id'])) {
             http_response_code(400);
             $error = ["error" => "Duplicate Record: RFQ already exists"];
             echo json_encode($error);

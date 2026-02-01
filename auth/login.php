@@ -76,6 +76,7 @@ if ($portal === 'ams') {
 
 $username = $input['username'] ?? '';
 $password = $input['password'] ?? '';
+$entity_id = $input['entity_id'] ?? '';
 $reqType = $_GET['req'] ?? '';
 
 if (!$username || !$password) {
@@ -84,10 +85,15 @@ if (!$username || !$password) {
     exit;
 }
 
+if (!$entity_id) {
+    http_response_code(400);
+    echo json_encode(["error" => "Entity ID is required"]);
+    exit;
+}
 
 
 $user = new UserLogin();
-$result = $user->validateUserLogin($username, $password);
+$result = $user->validateUserLogin($username, $password, $entity_id);
 $verify = $result[0];
 
 if ($verify) {

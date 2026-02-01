@@ -9,8 +9,14 @@ require_once __DIR__ . '../../../classes/authentication/middle.php';
 require_once __DIR__ . '../../../classes/Logger.php';
 require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
 
-// Validate login and authenticate JWT
-authenticateJWT();
+// Allow combo endpoint without authentication (needed for login form)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['type']) && $_GET['type'] === 'combo' 
+        && isset($_GET['fields']) && $_GET['fields'] === 'id,entity_name') {
+    // Allow access without authentication
+} else {
+    // Authenticate JWT for all other endpoints
+    authenticateJWT();
+}
 
 // Load config
 $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
@@ -39,6 +45,7 @@ switch ($method) {
             break;
         }
 
+        
         if (isset($_GET['id'])) {
             $id = intval($_GET['id']);
             $data = $entityOb->getEntityById($id, $module, $username);
@@ -47,6 +54,17 @@ switch ($method) {
             http_response_code($status);
             echo json_encode($response);
             $logger->logRequestAndResponse($_GET, $response);
+            break;
+        }
+
+        // if type = combo and fields = id,name then return id and name pairs and make it available for dropdowns
+        // to be accessed in login form without authentication
+        if (isset($_GET['type']) && $_GET['type'] === 'combo' && isset($_GET['fields']) 
+                && $_GET['fields'] === 'id,entity_name') {
+            $data = $entityOb->getEntityCombo($module, $username);
+            http_response_code(200);
+            echo json_encode(['entities' => $data]);
+            $logger->logRequestAndResponse($_GET, $data);
             break;
         }
 
@@ -93,6 +111,7 @@ switch ($method) {
         $state = intval(trim($input['state_id']));
         $country = intval(trim($input['country_id']));
         $pin = isset($input['pin']) ? trim($input['pin']) : '';
+        $salutation_name = trim($input['salutation_name']);
 
         $status = trim($input['status']);
         $primary_contact = isset($input['primary_contact']) ? intval($input['primary_contact']) : null;
@@ -113,7 +132,7 @@ switch ($method) {
         }
 
 
-        $result = $entityOb->addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact, $status, $module, $username);
+        $result = $entityOb->addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact, $salutation_name, $status, $module, $username);
         if ($result) {
             http_response_code(201);
             $response = ["message" => "Entity added successfully"];
@@ -139,7 +158,7 @@ switch ($method) {
         }
 
         $id = intval($_GET['id']);
-        $required = ['entity_name','cin','incorp_date','status'];
+        $required = ['entity_name','cin','incorp_date','salutation_name','status'];
         foreach ($required as $field) {
             if (!isset($input[$field]) || empty(trim($input[$field]))) {
                 http_response_code(400);
@@ -153,6 +172,7 @@ switch ($method) {
         $entity_name = trim($input['entity_name']);
         $cin = trim($input['cin']);
         $incorp_date = trim($input['incorp_date']);
+        $salutation_name = trim($input['salutation_name']);
         $status = trim($input['status']);
 
         if ($entityOb->checkEditDuplicateEntityName($entity_name, $id)) {
@@ -170,7 +190,7 @@ switch ($method) {
             break;
         }
 
-        $result = $entityOb->updateEntity($entity_name, $cin, $incorp_date, $status, $id, $module, $username);
+        $result = $entityOb->updateEntity($entity_name, $cin, $incorp_date, $salutation_name, $status, $id, $module, $username);
         if ($result !== false) {
             http_response_code(200);
             $response = ["message" => $result > 0 ? "Entity updated successfully" : "No changes made"];

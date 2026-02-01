@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../DbController.php';
 require_once __DIR__ . '/../Logger.php';
 require_once __DIR__ . '/../utils/GraphAutoMailer.php';
+require_once __DIR__ . '/../admin/Entity.php';
 
 class Rfq
 {
@@ -9,6 +10,7 @@ class Rfq
     private $logger;
     private $vendorLoginUrl;
     private $yourEmail;
+    private $entityOb;
 
 
     public function __construct()
@@ -20,6 +22,7 @@ class Rfq
         $this->logger = new Logger($debugMode, $logDir);
         $this->vendorLoginUrl = $config['vendor_login_url'];
         $this->yourEmail = $config['app_email'];
+        $this->entityOb = new Entity();
     }
 
     public function getAllRfqs($module, $username)
@@ -60,6 +63,26 @@ class Rfq
         return $this->conn->runQuery($query);
     }
 
+    public function getEntityNameByReferenceId($reference_id, $module, $username)
+    {
+        $query = 'SELECT ent.entity_name AS entity FROM vms_rfqs r
+                    JOIN tbl_entity ent ON r.entity_id = ent.id
+                    WHERE r.reference_id = ?';
+        $this->logger->logQuery($query, [$reference_id], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$reference_id]);
+        return $result ? $result['entity'] : null;
+    }
+
+    public function getEntityNameByVendorCode($vendor_code, $module, $username)
+    {
+        $query = 'SELECT ent.entity_name AS entity FROM vms_vendor v
+                    JOIN tbl_entity ent ON v.entity_id = ent.id
+                    WHERE v.vendor_code = ?';
+        $this->logger->logQuery($query, [$vendor_code], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$vendor_code]);
+        return $result ? $result['entity'] : null;
+    }
+
     public function getRfqsCount($module, $username)
     {
         $query = 'SELECT COUNT(*) AS total FROM vms_rfqs';
@@ -97,7 +120,7 @@ class Rfq
     public function insertRfq($vendor_name, $contact_name, $email, $mobile, $entity_id, $created_by, $module, $username)
     {
         //Generating Reference ID
-        $reference_id = $this->generateReferenceId();
+        $reference_id = $this->generateReferenceId($entity_id);
 
         //Create Vendaor Contact using Name, Email and Mobile
         //insert into tbl_contact  contact type = vendor , name = name, email, mobile
@@ -132,13 +155,16 @@ class Rfq
         $logMessage = 'RFQ Inserted';
         $insertId = $this->conn->insert($query, $params, $logMessage);
 
-        //Sending Email notification to Vendor with login details.
+        $entityName = $this->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
 
+        //Sending Email notification to Vendor with login details.
         $mailer = new AutoMail();
 
         // Create the key-value array for the email body
         $keyValueData = [
-            "Message" => "Your company vendor registration process has been initiated. Here are your login details.",
+            "Message" => "Your company vendor registration process has been initiated under $entityName. Here are your login details.",
             "Vendor Name" => $vendor_name,
             "Contact Person" => "IT",
             "Your EMail" => $this->yourEmail,
@@ -154,7 +180,7 @@ class Rfq
         $emailSent = $mailer->sendInfoEmail(
             subject: "Vendor Registration Details",
             greetings: "Dear Vendor,",
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$email],
             cc: [], // remove this in production
@@ -199,12 +225,16 @@ class Rfq
         return $this->conn->update($query, [$id], $logMessage);
     }
 
-
-    public function checkDuplicateRfq($vendor_name, $email, $mobile)
+    // RFQ is duplicate if vendor name, email and mobile already exists for same entity
+    // example: Vendor ABC, email@example.com, 1234567890, Entity 1
+    // another RFQ with same vendor name, email, mobile and entity should be considered duplicate
+    // They can have same vendor details for different entities 
+    public function checkDuplicateRfq($vendor_name, $email, $mobile, $entity_id)
     {
-        $query = 'SELECT 1 FROM vms_rfqs WHERE lower(trim(vendor_name)) = lower(trim(?)) OR email = ? OR mobile = ?';
-        $this->logger->logQuery($query, [$vendor_name, $email, $mobile], 'classes');
-        $duplicate = $this->conn->runSingle($query, [$vendor_name, $email, $mobile]);
+        $query = 'SELECT 1 FROM vms_rfqs WHERE lower(trim(vendor_name)) = lower(trim(?)) 
+                    AND email = ? AND mobile = ? AND entity_id = ?';
+        $this->logger->logQuery($query, [$vendor_name, $email, $mobile, $entity_id], 'classes');
+        $duplicate = $this->conn->runSingle($query, [$vendor_name, $email, $mobile, $entity_id]);
         return !empty($duplicate);
     }
 
@@ -483,11 +513,28 @@ class Rfq
         return mail($to, $subject, $message, $headers);
     }
 
-    public function generateReferenceId()
+
+    // Get CC Code by entity id
+    public function getCcCodeByEntityId($entity_id, $module, $username)
     {
+        $query = 'SELECT cc_code FROM tbl_costcenter WHERE entity_id = ?';
+        $this->logger->logQuery($query, [$entity_id], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$entity_id]);
+        return $result ? $result['cc_code'] : null;
+    }
+
+    // utility function for generating reference id
+    public function generateReferenceId($entity_id)
+    {
+        
         $latestId = $this->conn->runSingle("SELECT MAX(id) as max_id FROM vms_rfqs")['max_id'] ?? 0;
         $newId = $latestId + 1;
-        return 'RFI-VEN-' . str_pad($newId, 5, '0', STR_PAD_LEFT);
+        $ccCode = $this->getCcCodeByEntityId($entity_id, 'vms', 'system');
+        if ($ccCode) {
+            return 'RFI-' . strtoupper($ccCode) . '-' . str_pad($newId, 5, '0', STR_PAD_LEFT);
+        }
+        throw new Exception("CC Code not found for entity ID: $entity_id");
+        
     }
 
     public function isFormSubmittedPreviously($reference_id, $module, $username)
@@ -530,6 +577,14 @@ class Rfq
         $query = 'SELECT entity_id FROM vms_rfqs WHERE reference_id = ?';
         $this->logger->logQuery($query, [$reference_id], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$reference_id]);
+        return $result ? $result['entity_id'] : null;
+    }
+
+    public function getEntityIdByVendorCode($vendor_code, $module, $username)
+    {
+        $query = 'SELECT entity_id FROM vms_vendor WHERE vendor_code = ?';
+        $this->logger->logQuery($query, [$vendor_code], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$vendor_code]);
         return $result ? $result['entity_id'] : null;
     }
 

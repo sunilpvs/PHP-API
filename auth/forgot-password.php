@@ -45,6 +45,7 @@ $module = 'ForgotPassword';
 // Read input JSON
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $email = trim($input['email'] ?? '');
+$entity_id = trim($input['entity_id'] ?? '');
 
 // Only vendor portal supports password auth
 $portal = 'vendor';
@@ -56,15 +57,32 @@ if (!$email) {
     exit();
 }
 
+if (!$entity_id || !is_numeric($entity_id)) {
+    http_response_code(400);
+    echo json_encode(["error" => "Valid entity_id is required"]);
+    exit();
+}
+
+
 try {
     // Lookup user by email or username
     $db = new DBController();
     $user = $db->runSingle(
-        "SELECT id, email from tbl_users where email = ? OR user_name = ? LIMIT 1",
-        [$email, $email]
+        "SELECT id, email, entity_id from tbl_users where (email = ? OR user_name = ?) AND entity_id = ? LIMIT 1",
+        [$email, $email, $entity_id]
     );
 
-    if (empty($user) || !isset($user['email']) || !$user['email']) {
+    if(empty($user)){
+        // User not found
+        $logger->log("No account found with email: $email for entity_id: $entity_id", $module);
+        http_response_code(400);
+        echo json_encode([
+            "error" => "No account found with that email for the specified entity"
+        ]);
+        exit();
+    }
+
+    if (!isset($user['email']) || !$user['email']) {
         // User not found
         $logger->log("No account found with email: $email", $module);
         http_response_code(400);
@@ -73,7 +91,14 @@ try {
         ]);
         exit();
     }
-    
+
+    if (empty($user['entity_id']) || !is_numeric($user['entity_id'])) {
+        $logger->log("User record missing valid entity_id for email: " . $user['email'], $module);
+        http_response_code(500);
+        echo json_encode(["error" => "User record is invalid. Please contact support."]);
+        exit();
+    }
+
     $logger->log("Initiating password reset for user ID: " . $user['id'], $module);
     // Generate short-lived reset token (JWT)
     $jwt = new JWTHandler();
@@ -81,13 +106,14 @@ try {
     $token = $jwt->generateAccessToken([
         'sub' => $user['id'],
         'username' => $user['email'],
+        'entity_id' => $user['entity_id'],
         'domain' => $portal,
         'iat' => time(),
         'exp' => time() + (60 * $expiryMinutes)
     ]);
 
     $loginUser = new UserLogin();
-    $initiateStatus = $loginUser->initiateForgotPassword($user['id'], $token, $expiryMinutes);
+    $initiateStatus = $loginUser->initiateForgotPassword($user['id'], $user['entity_id'], $token, $expiryMinutes);
     if (!$initiateStatus) {
         $logger->log("Failed to initiate forgot password for user ID: " . $user['id'], $module);
         http_response_code(500);
@@ -104,18 +130,25 @@ try {
         exit();
     }
     $resetBase = preg_replace('#/login$#', '/reset-password', $vendorLoginUrl);
-                 
+
     $resetLink = $resetBase . '?token=' . urlencode($token);
+
+    $entityName = $db->runSingle(
+        "SELECT entity_name FROM tbl_entity WHERE id = ? LIMIT 1",
+        [$user['entity_id']]
+    )['entity_name'] ?? 'your';
 
     // Send email via Microsoft Graph
     $mailer = new AutoMail();
     $subject = 'Password Reset Request';
     $greetings = 'Dear Vendor,';
-    $name = "Shrichandra Group Team";
+    $name = $entityName ? $entityName : 'Shrichandra Group Team';
+    // message to show the user that requested the password reset for the specific entity in the vendor portal
     $keyValueData = [
-        'Message' => 'We received a request to reset your password. 
-                    Please use the link below to set a new password. 
-                    This link will expire in ' . $expiryMinutes . ' minutes.',
+        'Message' => 'We received a request to reset the password for your vendor portal account under ' . $entityName . '. 
+                  Please use the link below to create a new password. 
+                  For security reasons, this link will expire in ' . $expiryMinutes . ' minutes. 
+                  If you did not request this reset, please ignore this message.',
         'Email' => $user['email'],
         'Reset Link' => $resetLink,
         'Expires In' => $expiryMinutes . ' minutes'
@@ -124,7 +157,7 @@ try {
     // Attempt to send; still return success regardless
     $emailSentStatus = $mailer->sendInfoEmail($subject, $greetings, $name, $keyValueData, [$user['email']]);
 
-    if(!$emailSentStatus) {
+    if (!$emailSentStatus) {
         $logger->log("Failed to send reset email to: " . $user['email'], $module);
         http_response_code(400);
         echo json_encode(["error" => "Failed to send reset email. Please try again later."]);
@@ -138,8 +171,6 @@ try {
         'message' => 'A password reset link has been sent to your email.'
     ]);
     exit();
-
-
 } catch (Throwable $e) {
     // Do not leak internals; return generic success
     $logger->log("Error during forgot password process: " . $e->getMessage(), $module);
@@ -149,4 +180,3 @@ try {
         'message' => 'If the account exists, a reset link has been sent.'
     ]);
 }
-?>

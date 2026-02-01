@@ -62,11 +62,19 @@ if (!$userId) {
     exit;
 }
 
+$entityId = $decodedToken['entity_id'] ?? null;
+if (!$entityId) {
+    $logger->log("Entity ID not found in token payload", "ResetPassword");
+    http_response_code(400);
+    echo json_encode(["error" => "Invalid token payload"]);
+    exit;
+}
+
 // initiate user login class
 $user = new UserLogin();
 
 // verify password reset record
-$resetRecord = $user->getValidPasswordResetRecord($userId, $token);
+$resetRecord = $user->getValidPasswordResetRecord($userId, $entityId, $token);
 if (!$resetRecord) {
     http_response_code(400);
     echo json_encode(["error" => "Invalid or expired reset link"]);
@@ -74,7 +82,7 @@ if (!$resetRecord) {
 }
 
 
-$logger->log("Token validated for user ID: $userId", "ResetPassword");
+$logger->log("Token validated for user ID: $userId and entity ID: $entityId", "ResetPassword");
 $newPassword = $input['new_password'] ?? null;
  
 if (!$newPassword) {
@@ -102,10 +110,10 @@ if (
  
 // update DB
 
-$status = $user->changePassword($userId, $newPassword, $resetRecord['id']);
+$status = $user->changePassword($userId, $entityId, $newPassword, $resetRecord['id']);
 
 if(!$status){
-    $logger->log("Failed to reset password for user ID: $userId", "ResetPassword");
+    $logger->log("Failed to reset password for user ID: $userId and entity ID: $entityId", "ResetPassword");
     http_response_code(500);
     echo json_encode([
         "error" => "Failed to reset password"
@@ -113,7 +121,7 @@ if(!$status){
     exit;
 }
 
-$logger->log("Password reset successfully for user ID: $userId", "ResetPassword");
+$logger->log("Password reset successfully for user ID: $userId and entity ID: $entityId", "ResetPassword");
 http_response_code(200);
 echo json_encode([
     "message" => "Password has been reset successfully. You can now log in with your new password."

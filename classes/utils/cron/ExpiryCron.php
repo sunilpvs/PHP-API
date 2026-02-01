@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../DbController.php';
 require_once __DIR__ . '/../../vms/Rfq.php';
 require_once __DIR__ . '/../../../classes/Logger.php';
 require_once __DIR__ . '/../GraphAutoMailer.php';
+require_once __DIR__ . '/../../../classes/admin/Entity.php';
 
 // Protect against unauthorized execution
 $configPath = __DIR__ . '/../../../app.ini';
@@ -38,6 +39,7 @@ if (!$isCli && (empty($cronSecret) || !hash_equals($cronSecret, $requestSecret))
 try {
     $db = new DbController();
     $rfqObj = new Rfq();
+    $entityOb = new Entity();
     $config = parse_ini_file(__DIR__ . '/../../../app.ini');
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 
@@ -46,6 +48,7 @@ try {
 
     foreach ($expiredRfqs as $rfq) {
         $rfqId = $rfq['id'];
+        $reference_id = $rfq['reference_id'];
 
         // get email of the vendor associated with this RFQ
         $query = 'SELECT email FROM vms_rfqs where id = ?';
@@ -70,24 +73,31 @@ try {
 
         $vmsAdminEmails = $rfqObj->getVmsAdminEmails('cron', 'system');
 
+        $entityName = $rfqObj->getEntityNameByReferenceId($reference_id, 'cron', 'system');
+        $RfqEntityId = $rfqObj->getEntityIdByReferenceId($reference_id, 'cron', 'system');
+        $salutationName = $entityOb->getSalutationNameByEntityId($RfqEntityId, 'cron', 'system');
+
         $mailer = new AutoMail();
         $keyValueData = [
-            "Message" => "Your Vendor ID - " . $rfq['vendor_code'] . " has expired as of " . date('Y-m-d') . ". Please contact the VMS Team for further details.",
+            "Message" => "Your Vendor ID - " . $rfq['vendor_code'] . " under " . $entityName .
+                " has expired as of " . date('Y-m-d') . ". 
+                            Please contact the VMS Team for further details.",
             "Reference ID" => $rfq['reference_id'],
             // "Comments" => $commentText
         ];
+
+
 
         // Prepare email data and send email using the mailer
         $emailSent = $mailer->sendInfoEmail(
             subject: 'Vendor Expired - Reference ID: ' . $rfq['reference_id'],
             greetings: 'Dear Vendor,',
-            name: 'Shrichandra Group Team',
+            name: $salutationName ? $salutationName : 'Shrichandra Group Team',
             keyValueArray: $keyValueData,
             to: [$rfqVendorEmail],
             bcc: $vmsAdminEmails,
         );
     }
-    
 } catch (Exception $e) {
     $logger->log("Error in ExpiryCron: " . $e->getMessage(), 'ERROR', 'cron');
 
