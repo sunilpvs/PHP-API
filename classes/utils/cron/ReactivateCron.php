@@ -49,12 +49,12 @@ try {
         $rfqId = $rfq['id'];
         $vendorId = $rfq['vendor_id'];
 
-        // check if there are any other active RFQs for the same user
+        // check if there are any other active RFQs for the same vendor
         $hasOtherActiveRfqs = $rfqObj->hasOtherActiveRfqs($vendorId, 'cron', );
 
         // if there are no active rfqs, exit the loop
         if(!$hasOtherActiveRfqs) {
-            $logger->log("Skipping expiry for RFQ ID $rfqId as there are no other active RFQs for user ID $userId", [], 'cron');
+            $logger->log("Skipping expiry for RFQ ID $rfqId as there are no other active RFQs for vendor with ID $vendorId", [], 'cron');
             continue;
         }
 
@@ -75,7 +75,7 @@ try {
         $vendorActivated = $db->update($query, [$activeRfqId, $vendorCode]);
 
         if(!$rfqActivated || !$vendorActivated) {
-            $logger->log("Failed to reactivate RFQ ID $activeRfqId or Vendor Code $vendorCode for user ID $userId", [], 'cron');
+            $logger->log("Failed to reactivate RFQ ID $activeRfqId or Vendor Code $vendorCode for vendor ID $vendorId", [], 'cron');
             continue;
         }
 
