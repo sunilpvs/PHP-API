@@ -203,6 +203,19 @@ class RfqReview
     // REVIEW
     public function activateVendorByReferenceId($reference_id, $expiry_date, $module, $username)
     {
+
+        // set variables
+
+        $vendorEmail = $this->rfqData->getEmailByReferenceId($reference_id, $module, $username);
+
+
+        $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
+
+        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
+        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
+
+
         // set expiry date after approval 
         $query = "UPDATE vms_rfqs SET 
                     expiry_date = ?
@@ -220,7 +233,82 @@ class RfqReview
             return false; // Vendor ID retrieval failed
         }
 
-        // set vendor code in rfq table
+        // get vendor code from vendor id
+        $vendor_code = $this->rfqData->getVendorCodeByVendorId($vendor_id, $module, $username);
+
+        // the rfq is only active when another rfq is expired else it will remain inactive.
+        // it will be activated in reactivate cron once the current active rfq is expired.
+
+        // flow:
+        // check the vendor id has any other active rfq and it is not this reference id and it is not expired
+        // if yes, then do not activate this rfq
+        // if no, then activate this rfq and set vendor status to active and set active_rfq to this rfq id
+
+
+        $query = "SELECT id FROM vms_rfqs WHERE 
+                    vendor_id = ? AND 
+                    is_active = ? AND 
+                    reference_id != ? AND 
+                    ( expiry_date > ?)";
+        $params = [
+            $vendor_id,
+            1,
+            $reference_id,
+            date('Y-m-d')
+        ];
+        $existingActiveRfqs = $this->conn->runSingle($query, $params);
+
+        if (!empty($existingActiveRfqs)) {
+            // 
+
+            $query = "UPDATE vms_rfqs SET 
+                    status = ? ,
+                    vendor_id = ?,
+                    expiry_date = ?
+                    WHERE reference_id = ?";
+            $params = [
+                11,
+                $vendor_id,
+                $expiry_date,
+                $reference_id
+            ];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            $rfqVendorCodeUpdatedId = $this->conn->update($query, $params, 'RFQ vendor code updated');
+
+            // there is another active rfq for this vendor, so do not activate this rfq
+            $this->logger->log("Skipping activation for RFQ Reference ID $reference_id as there are other active RFQs for Vendor ID $vendor_id", [], 'classes', $module, $username);
+
+            // send email to vendor about approval but rfq not activated
+            $mailer = new AutoMail();
+            // Create the key-value array for the email body
+            $keyValueData = [
+                "Message" => "Your RFQ with Reference ID: $reference_id under $entityName has been approved. 
+                                However, there are other active RFQs associated with your Vendor ID: $vendor_code. 
+                                Therefore, this RFQ will not be activated at this time. This will be activated once the current active RFQ expires.
+                                You will be notified once the activation is complete. Contact the VMS Team for further details.",
+                "Reference ID" => $reference_id,
+                "Vendor Code" => $vendor_code
+            ];
+            $emailSent = $mailer->sendInfoEmail(
+                subject: 'RFQ Approval Notice - Reference ID: ' . $reference_id,
+                greetings: 'Dear Vendor,',
+                name: $salutationName ? $salutationName : 'Shrichandra Group Team',
+                keyValueArray: $keyValueData,
+                to: [$vendorEmail],
+                cc: [], // remove this in production
+                bcc: $vmsAdminEmails,
+            );
+
+            if (
+                $rfqVendorCodeUpdatedId &&
+                $emailSent
+            ) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
         $query = "UPDATE vms_rfqs SET 
                     status = ? ,
                     vendor_id = ?,
@@ -237,6 +325,7 @@ class RfqReview
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $rfqVendorCodeUpdatedId = $this->conn->update($query, $params, 'RFQ vendor code updated');
 
+
         // set vendor active_rfq id in vendor table
         $activeRfqId = $this->rfqData->getRfqIdByReferenceId($reference_id, $module, $username);
         $query = "UPDATE vms_vendor SET 
@@ -250,17 +339,6 @@ class RfqReview
         ];
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $vendorStatusUpdatedId = $this->conn->update($query, $params, 'Vendor activated');
-
-        $vendorEmail = $this->rfqData->getEmailByReferenceId($reference_id, $module, $username);
-
-        $vendor_code = $this->rfqData->getVendorCodeByVendorId($vendor_id, $module, $username);
-
-        $vmsAdminEmails = $this->rfqData->getVmsAdminEmails('cron', 'system');
-
-        $entityName = $this->rfqData->getEntityNameByReferenceId($reference_id, $module, $username);
-        $RfqEntityId = $this->rfqData->getEntityIdByReferenceId($reference_id, $module, $username);
-        $salutationName = $this->entityOb->getSalutationNameByEntityId($RfqEntityId, $module, $username);
-
 
         $mailer = new AutoMail();
         // Create the key-value array for the email body
