@@ -275,10 +275,19 @@ class Rfq
 
     public function getPendingSubmittedRfqs($module, $username)
     {
-        $query = 'SELECT id, reference_id, vendor_name FROM vms_rfqs WHERE status IN (8, 9) ORDER BY vendor_name ASC';
+        $query = 'SELECT id, reference_id, vendor_name FROM vms_rfqs WHERE status IN (8) ORDER BY vendor_name ASC';
         $this->logger->logQuery($query, [], 'classes', $module, $username);
         return $this->conn->runQuery($query);
     }
+
+    public function getPendingVerifiedRfqs($module, $username)
+    {
+        $query = 'SELECT id, reference_id, vendor_name FROM vms_rfqs WHERE status IN (9) ORDER BY vendor_name ASC';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        return $this->conn->runQuery($query);
+    }
+
+    
 
     public function getAllSubmittedRfqs($module, $username)
     {

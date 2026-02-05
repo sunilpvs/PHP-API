@@ -41,7 +41,15 @@ switch ($method) {
             break;
         }
 
-        if (isset($_GET['type']) && $_GET['type'] == 'pending-rfqs') {
+        if (isset($_GET['type']) && $_GET['type'] == 'pending-rfqs' && isset($_GET['status']) && $_GET['status'] == 'verified') {
+            $data = $rfqOb->getPendingVerifiedRfqs($module, $username);
+            http_response_code(200);
+            echo json_encode($data);
+            $logger->logRequestAndResponse($_GET, $data);
+            break;
+        }
+
+        if(isset($_GET['type']) && $_GET['type'] == 'pending-rfqs' && isset($_GET['status']) && $_GET['status'] == 'submitted') {
             $data = $rfqOb->getPendingSubmittedRfqs($module, $username);
             http_response_code(200);
             echo json_encode($data);
