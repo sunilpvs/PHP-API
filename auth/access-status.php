@@ -44,9 +44,10 @@ if (!isset($_GET['type'])) {
 
 $type = $_GET['type'];
 
-if($type !== 'vms' && $type !== 'admin'){
+if($type !== 'vms' && $type !== 'admin' && $type !== 'ams'){
     http_response_code(400);
-    echo json_encode(["error" => "Invalid type. Use vms for vms access check or admin for admin access check"]);
+    echo json_encode(["error" => "Invalid type. Use vms for vms access check, admin for admin access check, 
+                                    or ams for ams access check"]);
     exit();
 }
 
@@ -58,6 +59,26 @@ if($type == 'vms'){
         http_response_code(200);
         echo json_encode([
             "vms_access" => "granted",
+        ]);
+        exit();
+    } else {
+        http_response_code(403);
+        echo json_encode([
+            "error" => "Access denied",
+            "req_status" => $reqStatus ?? 'no_request'
+        ]);
+        exit();
+    }
+}
+
+
+if($type == 'ams'){
+    $amsAccess = $accessReq->checkAmsAccess($email, 'Access Request', $email);
+    $reqStatus = $accessReq->getAmsAccessStatus($email, 'Access Request', $email);
+    if($amsAccess>0){
+        http_response_code(200);
+        echo json_encode([
+            "ams_access" => "granted",
         ]);
         exit();
     } else {

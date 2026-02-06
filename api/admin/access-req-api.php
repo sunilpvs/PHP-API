@@ -43,7 +43,7 @@ switch ($method) {
             break;
         }
 
-        if(isset($_GET['type']) && $_GET['type'] === 'pending_count') {
+        if (isset($_GET['type']) && $_GET['type'] === 'pending_count') {
             $data = $accessRequest->getPendingAccessRequestsCount($module, $username);
             http_response_code(200);
             echo json_encode(['pending_count' => $data]);
@@ -51,7 +51,7 @@ switch ($method) {
             break;
         }
 
-        if(isset($_GET['type']) && $_GET['type'] === 'req_count') {
+        if (isset($_GET['type']) && $_GET['type'] === 'req_count') {
             $data = $accessRequest->getAccessRequestsCount($module, $username);
             http_response_code(200);
             echo json_encode(['req_count' => $data]);
@@ -68,7 +68,7 @@ switch ($method) {
             break;
         }
 
-        if(isset($_GET['type']) && $_GET['type'] === 'pending') {
+        if (isset($_GET['type']) && $_GET['type'] === 'pending') {
             $data = $accessRequest->getPendingAccessRequests($module, $username);
             http_response_code(200);
             echo json_encode($data);
@@ -76,7 +76,7 @@ switch ($method) {
             break;
         }
 
-        if(isset($_GET['type']) && $_GET['type'] === 'all_users') {
+        if (isset($_GET['type']) && $_GET['type'] === 'all_users') {
             $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
             $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
             $offset = ($page - 1) * $limit;
@@ -143,7 +143,7 @@ switch ($method) {
         // }
 
         $requested_module = $input['requested_module'] ?? null;
-        if(!$requested_module){
+        if (!$requested_module) {
             http_response_code(400);
             $error = ["error" => "Requested module is required"];
             echo json_encode($error);
@@ -151,7 +151,7 @@ switch ($method) {
             return;
         }
 
-        if($requested_module == 1){
+        if ($requested_module == 1) {
             $existingAdminRequest = $accessRequest->checkExistingAdminRequest($email, $module, $username);
             if ($existingAdminRequest > 0) {
                 http_response_code(400);
@@ -160,7 +160,7 @@ switch ($method) {
                 $logger->logRequestAndResponse($input, $error);
                 return;
             }
-        } else if($requested_module == 4){
+        } else if ($requested_module == 4) {
             $existingVmsRequest = $accessRequest->checkExistingVmsRequest($email, $module, $username);
             if ($existingVmsRequest > 0) {
                 http_response_code(400);
@@ -169,11 +169,19 @@ switch ($method) {
                 $logger->logRequestAndResponse($input, $error);
                 return;
             }
+        } else if ($requested_module == 5) {
+            $existingAmsRequest = $accessRequest->checkExistingAmsRequest($email, $module, $username);
+            if ($existingAmsRequest > 0) {
+                http_response_code(400);
+                $error = ["error" => "Request already submitted. Please wait for approval."];
+                echo json_encode($error);
+                $logger->logRequestAndResponse($input, $error);
+                return;
+            }
         }
-
-         if (!isset($input['requested_module']) || !in_array($input['requested_module'], [1, 4, 3])) {
+        if (!isset($input['requested_module']) || !in_array($input['requested_module'], [1, 4, 3, 5])) {
             http_response_code(400);
-            $error = ["error" => "Invalid requested module. Use 1 for Admin  or 3 for WMS or 4 for VMS"];
+            $error = ["error" => "Invalid requested module. Use 1 for Admin  or 3 for WMS or 4 for VMS or 5 for AMS"];
             echo json_encode($error);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
             break;
@@ -186,14 +194,13 @@ switch ($method) {
             $module,
             $username
         );
-        
-        if ($result ) {
+
+        if ($result) {
             http_response_code(201);
             $response = ["message" => "Access request created successfully"];
         } else {
             http_response_code(500);
             $response = ["error" => "Failed to create access request"];
-
         }
 
         echo json_encode($response);
@@ -204,7 +211,7 @@ switch ($method) {
         $logger->log("PUT request received");
         $user_role_id = null;
 
-        
+
 
         if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
             http_response_code(400);
@@ -236,16 +243,17 @@ switch ($method) {
         $existingRequest = $accessRequest->getAccessRequestById($id, $module, $username);
 
         $status = $input['status'];
-        if($status == 11){
-            if (!isset($input['user_role']) || !in_array($input['user_role'], [2, 6, 7])) {
+        if ($status == 11) {
+            if (!isset($input['user_role']) || !in_array($input['user_role'], [2, 6, 7, 9, 10])) {
                 http_response_code(400);
-                $error = ["error" => "Invalid user role. Use 2 for IT Admin or 6 for VMS ADMIN or 7 for VMS MANAGEMENT"];
+                $error = ["error" => "Invalid user role. Use 2 for IT Admin or 6 for VMS ADMIN or 7 for VMS MANAGEMENT 
+                                        or 9 for AMS ADMIN or 10 for AMS MANAGEMENT"];
                 echo json_encode($error);
                 $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
                 break;
             }
             $user_role_id = $input['user_role'];
-            if($existingRequest['requested_module'] == 1 && !in_array($user_role_id, [2])){
+            if ($existingRequest['requested_module'] == 1 && !in_array($user_role_id, [2])) {
                 http_response_code(400);
                 $error = ["error" => "For Admin module, only IT Admin role (2) can be assigned."];
                 echo json_encode($error);
@@ -253,20 +261,27 @@ switch ($method) {
                 break;
             }
 
-            if($existingRequest['requested_module'] == 4 && !in_array($user_role_id, [6,7])){
+            if ($existingRequest['requested_module'] == 4 && !in_array($user_role_id, [6, 7])) {
                 http_response_code(400);
                 $error = ["error" => "For VMS module, only VMS ADMIN (6) or VMS MANAGEMENT (7) roles can be assigned."];
                 echo json_encode($error);
                 $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
                 break;
-            }            
-            
-        }
-        
+            }
 
-        
-        if($existingRequest){
-            if($existingRequest['status'] == 11 || $existingRequest['status'] == 12){
+            if ($existingRequest['requested_module'] == 5 && !in_array($user_role_id, [9, 10])) {
+                http_response_code(400);
+                $error = ["error" => "For AMS module, only AMS ADMIN (9) or AMS MANAGEMENT (10) roles can be assigned."];
+                echo json_encode($error);
+                $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
+                break;
+            }
+        }
+
+
+
+        if ($existingRequest) {
+            if ($existingRequest['status'] == 11 || $existingRequest['status'] == 12) {
                 http_response_code(400);
                 $error = ["error" => "This access request has already been processed."];
                 echo json_encode($error);
@@ -304,7 +319,7 @@ switch ($method) {
         $emailToDelete = $input['email'];
         $user_module_id = (int)$input['user_module'];
 
-        $validModules = [1, 2, 3, 4]; // 1=Admin, 3=WMS, 4=VMS
+        $validModules = [1, 2, 3, 4, 5]; // 1=Admin, 3=WMS, 4=VMS, 5=AMS
         if (!in_array($user_module_id, $validModules, true)) {
             http_response_code(400);
             $error = [
@@ -330,7 +345,7 @@ switch ($method) {
             break;
         }
 
-        if($emailToDelete === $email) {
+        if ($emailToDelete === $email) {
             http_response_code(400);
             $error = ["error" => "You cannot delete your own Admin access"];
             echo json_encode($error);
@@ -354,7 +369,7 @@ switch ($method) {
         //     }
         // }
 
-        if($user_module_id == 2) {
+        if ($user_module_id == 2) {
             http_response_code(400);
             $error = ["error" => "Default module access cannot be deleted"];
             echo json_encode($error);
@@ -389,5 +404,3 @@ switch ($method) {
         $logger->logRequestAndResponse($_SERVER, $error);
         break;
 }
-?>
-
