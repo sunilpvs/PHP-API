@@ -335,6 +335,17 @@ class AccessRequest
             // If rejected, no changes to user modules
         }
 
+        if($requested_module_id == 4){
+            $requested_module_name = "Vendor Management System";
+        } else if($requested_module_id == 1){
+            $requested_module_name = "Admin Portal";
+        } else if($requested_module_id == 3){
+            $requested_module_name = "Warehouse Management System";
+        } else if($requested_module_id == 5){
+            $requested_module_name = "Asset Management System";
+        } else {
+            $requested_module_name = "Unknown Module";
+        }
 
         // Get the Requestor Name
         $req_name = self::getRequestorNameByEmail($requestor_email, $module, $username);
@@ -342,7 +353,7 @@ class AccessRequest
         // Send email to the requestor about the status update
         if ($statusMessage == 'approved') {
             $keyValueData = [
-                "Message" =>  "Your request for access to the $requested_module - Vendor Management System has been $statusMessage. 
+                "Message" =>  "Your request for access to the $requested_module - $requested_module_name has been $statusMessage. 
                                 Please login to the system to view the status of your requests.",
                 "Employee Name" => $req_name,
 
@@ -350,7 +361,7 @@ class AccessRequest
             ];
         } else {
             $keyValueData = [
-                "Message" => "Your request for access to the $requested_module - Vendor Management System has been $statusMessage. 
+                "Message" => "Your request for access to the $requested_module - $requested_module_name has been $statusMessage. 
                                 For more details, please contact the IT department.",
                 "Employee Name" => $req_name,
             ];
