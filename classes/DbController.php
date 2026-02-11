@@ -116,6 +116,30 @@ class DBController
         }
     }
 
+    public function insertBatch($query, $paramsArray = [], $logMessage = '')
+    {
+        try {
+            $this->beginTrans();
+            $stmt = $this->conn->prepare($query);
+            foreach ($paramsArray as $params) {
+                $stmt->execute($params);
+            }
+
+            if ($logMessage) {
+                $logMessage .= " - Batch insert completed with " . count($paramsArray) . " records.";
+            } else {
+                $logMessage = "Batch insert completed with " . count($paramsArray) . " records.";
+            }
+
+            $this->logActivity($logMessage, $query);
+            $this->commitTrans();
+            return true;
+        } catch (PDOException $ex) {
+            $this->rollbackTrans();
+            throw $ex;
+        }
+    }
+
     public function update($query, $params = [], $logMessage = '')
     {
         try {
