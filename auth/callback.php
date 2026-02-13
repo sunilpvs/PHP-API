@@ -129,6 +129,17 @@
     $result = $dbObject->runSingle($query, $params, 'Fetch user ID for JWT from Microsoft OAuth');
     $userId = $result['id'];
 
+    // get allowed domains for this user
+    $query = "SELECT lower(m.module_name) as module FROM tbl_user_modules um 
+                JOIN tbl_module m 
+                ON um.module_id = m.module_id 
+                WHERE um.email=?";
+    $params = [$email];
+    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $allowedDomains = $dbObject->runQuery($query, $params, 'Fetch allowed domains for user from Microsoft OAuth');
+
+    $allowedDomains = array_column($allowedDomains, 'module'); // Extract module names into a simple array
+
     // Create custom JWT tokens
     $jwt = new JWTHandler();
     $jwtAccess = $jwt->generateAccessToken([
@@ -136,7 +147,7 @@
         "sub" => $userId,
         "username" => $email,
         "auth_provider" => "microsoft",
-        "domain" => $subDomain,
+        "allowed_domains" => $allowedDomains,
         "iat"   => time(),
         "exp"   => time() + (60 * 60 * 3)
 
@@ -148,7 +159,7 @@
         "sub" => $userId,
         "username" => $email,
         "auth_provider" => "microsoft",
-        "domain" => $subDomain,
+        "allowed_domains" => $allowedDomains,
         "iat" => time(),
         "exp" => time() + (60 * 60 * 3)
 
@@ -185,16 +196,17 @@
         "samesite" => "None",
     ]);
 
-   
+   $redirectPortal = $_GET['portal'] ?? $_SESSION['portal'] ?? 'internal';
 
     $redirectMap = [
+        'internal' => $_ENV['INTERNAL_PORTAL_URL'],
         'admin' => $_ENV['ADMIN_PORTAL_URL'],
         'vms' => $_ENV['VMS_PORTAL_URL'],
         'ams' => $_ENV['AMS_PORTAL_URL']
     ];
     
     // Redirect to frontend
-    $redirectURI = $redirectMap[$subDomain];
+    $redirectURI = $redirectMap[$redirectPortal] ?? $redirectMap['internal'];
     header("Location: $redirectURI");
     exit;
 

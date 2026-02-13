@@ -67,7 +67,8 @@ if (!$verified) {
     exit();
 }
 
-if ($verified->domain !== $middleware_portal) {
+$portals = $verified->allowed_domains ?? null;
+if (!$portals || !in_array($middleware_portal, $portals)) {
     http_response_code(401);
     echo json_encode(["error" => "Refresh token does not match the portal"]);
     exit();
@@ -80,10 +81,11 @@ $username = $verified->username;
 $newAccessToken = $jwt->generateAccessToken([
     "sub" => $verified->sub,
     "username" => $username,
-    "domain" => $middleware_portal,
+    "allowed_domains" => $portals,
     "iat" => time(),
     "exp" => time() + (60 * 15) // Access token valid for 15 minutes
 ]);
+
 
 setcookie(
     "access_token",

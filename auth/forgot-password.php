@@ -63,6 +63,8 @@ if (!$entity_id || !is_numeric($entity_id)) {
     exit();
 }
 
+$allowedDomains = [$portal];
+
 
 try {
     // Lookup user by email or username
@@ -107,7 +109,7 @@ try {
         'sub' => $user['id'],
         'username' => $user['email'],
         'entity_id' => $user['entity_id'],
-        'domain' => $portal,
+        'allowed_domains' => $allowedDomains,
         'iat' => time(),
         'exp' => time() + (60 * $expiryMinutes)
     ]);

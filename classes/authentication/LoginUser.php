@@ -152,10 +152,9 @@ class UserLogin
         }
     }
 
-    function getPortalFromJWT()
+    function getAllowedDomainsFromJWT()
     {
         $token = $this->getToken(); // Retrieve the token
-
         if (!$token) {
             http_response_code(401);
             echo json_encode(["error" => "Token not found"]);
@@ -164,13 +163,14 @@ class UserLogin
 
         $decodedToken = $this->jwt->decodeJWT($token);
 
-        $portal = $decodedToken['domain'] ?? null;
+        // list of allowed domains for this user, used for frontend access control
+        $allowed_domains = $decodedToken['allowed_domains'] ?? null;
 
-        if ($portal) {
-            return $portal;
+        if ($allowed_domains) {
+            return $allowed_domains;
         } else {
             http_response_code(401);
-            echo json_encode(["error" => "Portal not found in token"]);
+            echo json_encode(["error" => "Allowed domains not found in token"]);
             exit;
         }
     }

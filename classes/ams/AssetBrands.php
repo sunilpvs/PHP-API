@@ -102,8 +102,10 @@ class AssetBrands
     {
         try {
             $query = 'INSERT INTO ams_asset_brands (brand, created_by) VALUES (?, ?)';
-            $this->logger->logQuery($query, [$brand, $created_by], 'classes', $module, $username);
-            return $this->conn->insert($query, [$brand, $created_by]);
+            $params = [$brand, $created_by];
+            $this->logger->logQuery($query, [], 'classes', $module, $username);
+            $logMessage = "Asset brand '$brand' inserted by user ID $created_by";
+            return $this->conn->insert($query, $params, $logMessage);
         } catch (Exception $e) {
             $this->logger->log('Error inserting asset brand: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
@@ -118,7 +120,7 @@ class AssetBrands
             $this->logger->log('No brands to insert from excel or invalid format', 'classes', 'Excel Import', 'System');
             return false;
         }
-        
+
         try {
             $query = 'INSERT INTO ams_asset_brands (brand, created_by) VALUES (?, ?)';
             $params = [];
@@ -159,7 +161,8 @@ class AssetBrands
         try {
             $query = 'UPDATE ams_asset_brands SET brand = ?, last_updated_by = ? WHERE id = ?';
             $this->logger->logQuery($query, [$brand, $last_updated_by, $id], 'classes', $module, $username);
-            return $this->conn->update($query, [$brand, $last_updated_by, $id]);
+            $logMessage = "Asset brand ID $id updated to '$brand' by user ID $last_updated_by";
+            return $this->conn->update($query, [$brand, $last_updated_by, $id], $logMessage);
         } catch (Exception $e) {
             $this->logger->log('Error updating asset brand: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
@@ -172,7 +175,8 @@ class AssetBrands
         try {
             $query = 'DELETE FROM ams_asset_brands WHERE id = ?';
             $this->logger->logQuery($query, [$id], 'classes', $module, $username);
-            return $this->conn->delete($query, [$id]);
+            $logMessage = "Asset brand ID $id deleted by user $username";
+            return $this->conn->delete($query, [$id], $logMessage);
         } catch (Exception $e) {
             $this->logger->log('Error deleting asset brand: ' . $e->getMessage(), 'classes', $module, $username);
             return false;

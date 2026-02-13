@@ -45,9 +45,16 @@ if (!$decodedToken) {
     echo json_encode(["error" => "Invalid or expired token"]);
     exit;
 }
+$portalsInToken = $decodedToken['allowed_domains'] ?? null;
+if (!$portalsInToken) {
+    $logger->log("Allowed domains not found in token payload", "ResetPassword");
+    http_response_code(400);
+    echo json_encode(["error" => "Invalid token payload: allowed domains missing"]);
+    exit;
+}
 
-if ($decodedToken['domain'] !== 'vendor') {
-    $logger->log("Invalid reset domain: " . $decodedToken['domain'], "ResetPassword");
+if (!in_array('vendor', $portalsInToken)) {
+    $logger->log("Invalid reset domain: " . implode(',', $portalsInToken), "ResetPassword");
     http_response_code(403);
     echo json_encode(["error" => "Invalid reset domain"]);
     exit;

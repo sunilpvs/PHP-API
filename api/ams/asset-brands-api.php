@@ -8,6 +8,7 @@ require_once __DIR__ . '../../../classes/ams/AssetBrands.php';
 require_once __DIR__ . '../../../classes/authentication/middle.php';
 require_once __DIR__ . '../../../classes/Logger.php';
 require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
+require_once __DIR__ . '../../../classes/utils/ExcelImportHelper.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php';
 
 use \PhpOffice\PhpSpreadsheet\IOFactory;
@@ -121,13 +122,7 @@ switch ($method) {
                 }
 
                 $headerRow = $rows[1];
-                $brandColumn = null;
-                foreach ($headerRow as $col => $value) {
-                    if (strtolower(trim((string)$value)) === 'brand') {
-                        $brandColumn = $col;
-                        break;
-                    }
-                }
+                $brandColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'brand');
 
                 if ($brandColumn === null) {
                     http_response_code(400);
@@ -137,52 +132,41 @@ switch ($method) {
                     break;
                 }
 
-                $totalRows = 0;
-                $skippedNull = 0;
-                $skippedInvalid = 0;
-                $skippedDuplicateFile = 0;
-                $skippedDuplicateDb = 0;
-                $uniqueBrands = [];
-                $seen = [];
+                $analysis = ExcelImportHelper::analyzeColumnValues($rows, $brandColumn, [
+                    'regex' => $regExp,
+                    'null_values' => ['', 'null'],
+                    'null_reason' => 'Brand is empty',
+                    'invalid_reason' => 'Brand name can only contain letters and spaces',
+                    'duplicate_file_reason' => 'Duplicate brand in file',
+                ]);
 
-                foreach ($rows as $index => $row) {
-                    if ($index === 1) {
-                        continue;
-                    }
-                    $totalRows++;
-                    $cellValue = isset($row[$brandColumn]) ? trim((string)$row[$brandColumn]) : '';
-                    if ($cellValue === '' || strtolower($cellValue) === 'null') {
-                        $skippedNull++;
-                        continue;
-                    }
+                $rowErrors = $analysis['errors'];
+                $stats = $analysis['stats'];
+                $validRows = $analysis['valid_rows'];
 
-                    if (!preg_match($regExp, $cellValue)) {
-                        $skippedInvalid++;
-                        continue;
-                    }
+                $brandsLower = array_map(function ($row) {
+                    return $row['normalized'];
+                }, $validRows);
 
-                    $lowerValue = strtolower($cellValue);
-                    if (isset($seen[$lowerValue])) {
-                        $skippedDuplicateFile++;
-                        continue;
-                    }
-
-                    $seen[$lowerValue] = true;
-                    $uniqueBrands[$lowerValue] = $cellValue;
-                }
-
-                $brandsLower = array_keys($uniqueBrands);
                 $existingLower = $brandObj->getExistingBrandsByNames($brandsLower, $module, $username);
                 $existingSet = array_fill_keys($existingLower, true);
 
                 $brandsToInsert = [];
-                foreach ($uniqueBrands as $lowerValue => $originalValue) {
-                    if (isset($existingSet[$lowerValue])) {
+                $skippedDuplicateDb = 0;
+                foreach ($validRows as $row) {
+                    if (isset($existingSet[$row['normalized']])) {
                         $skippedDuplicateDb++;
+                        $rowErrors[] = [
+                            'row' => $row['row'],
+                            'value' => $row['value'],
+                            'reason' => 'Brand already exists',
+                        ];
                         continue;
                     }
-                    $brandsToInsert[] = $originalValue;
+                    $brandsToInsert[] = $row['value'];
                 }
+
+                $rowErrors = ExcelImportHelper::sortRowErrors($rowErrors);
 
                 if (!empty($brandsToInsert)) {
                     $inserted = $brandObj->insertBatchAssetBrandsFromExcel($brandsToInsert, $username);
@@ -198,12 +182,13 @@ switch ($method) {
                 http_response_code(200);
                 $response = [
                     "message" => "Excel import completed",
-                    "total_rows" => $totalRows,
+                    "total_rows" => $stats['total_rows'],
                     "inserted" => count($brandsToInsert),
-                    "skipped_null" => $skippedNull,
-                    "skipped_invalid" => $skippedInvalid,
-                    "skipped_duplicate_file" => $skippedDuplicateFile,
-                    "skipped_duplicate_db" => $skippedDuplicateDb
+                    "skipped_null" => $stats['skipped_null'],
+                    "skipped_invalid" => $stats['skipped_invalid'],
+                    "skipped_duplicate_file" => $stats['skipped_duplicate_file'],
+                    "skipped_duplicate_db" => $skippedDuplicateDb,
+                    "row_errors" => $rowErrors
                 ];
                 echo json_encode($response);
                 $logger->logRequestAndResponse(["file" => $fileName], $response);
@@ -295,8 +280,11 @@ switch ($method) {
             break;
         }
 
+        $id = intval($_GET['id']);
+        $brand = trim($input['brand']);
+
         // check duplicate brand
-        $existingBrand = $brandObj->isDuplicateBrand(trim($input['brand']), $module, $username);
+        $existingBrand = $brandObj->isDuplicateBrandForUpdate($id, $brand, $module, $username);
         if ($existingBrand) {
             http_response_code(409);
             $error = ["error" => "Brand name already exists"];
@@ -305,8 +293,7 @@ switch ($method) {
             break;
         }
 
-        $id = intval($_GET['id']);
-        $brand = trim($input['brand']);
+
 
         $result = $brandObj->updateAssetBrand($id, $brand, $username, $module, $username);
         if ($result) {

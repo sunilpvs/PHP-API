@@ -40,6 +40,7 @@ if (!in_array($portal, $portals)) {
     echo json_encode(["error" => "Invalid portal specified"]);
     exit();
 }
+
 $user = verifyToken($portal);
 
 
