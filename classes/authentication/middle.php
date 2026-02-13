@@ -51,6 +51,7 @@ function authenticateJWT() {
         exit();
     }
     
+
     if($allowed_domains && empty(array_intersect($allowed_domains, $portals))) {
         http_response_code(401);
         echo json_encode(["error" => "Invalid portal in token"]);

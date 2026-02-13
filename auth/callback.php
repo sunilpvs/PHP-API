@@ -168,7 +168,7 @@
 
     // ✅ Set real Microsoft token for Graph requests
     setcookie("microsoft_access_token", $msAccessToken, [
-        "expires" => time() + 60 * 60 * 3, // 3 hours
+        "expires" => time() + (60 * 60 * 3), // 3 hours
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -179,7 +179,7 @@
 
     // ✅ Set your custom JWT for API auth
     setcookie("access_token", $jwtAccess, [
-        "expires" => time() + 60 * 60 * 3,
+        "expires" => time() + (60 * 60 * 3),
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -188,7 +188,7 @@
     ]);
 
     setcookie("refresh_token", $jwtRefresh, [
-        "expires" => time() + 60 * 60 * 3,
+        "expires" => time() + (60 * 60 * 3),
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,

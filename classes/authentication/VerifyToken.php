@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 
-function verifyToken($middleware_portal) {
+function verifyToken() {
 
     $jwt = new JWTHandler();
 
@@ -59,11 +59,8 @@ function verifyToken($middleware_portal) {
         exit();
     }
 
-    if(!in_array($middleware_portal, $allowed_domains)) {
-        http_response_code(401);
-        echo json_encode(["error" => "Allowed domains mismatch"]);
-        exit();
-    }
+    
+    
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
     http_response_code(200);
     echo json_encode(["message" => "Access granted"]);

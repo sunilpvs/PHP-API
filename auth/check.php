@@ -41,7 +41,7 @@ if (!in_array($portal, $portals)) {
     exit();
 }
 
-$user = verifyToken($portal);
+$user = verifyToken();
 
 
 error_log("Received cookies: " . json_encode($_COOKIE));
