@@ -32,7 +32,8 @@
     ]);
 
     // Detect subdomain (portal) from url parameter or session
-    $portal = $_GET['portal'];
+    // default -> internal portal(home), admin -> admin portal, vms -> vms portal, ams -> ams portal
+    $portal = $_GET['portal'] ?? 'default'; // Default to 'default' if no portal specified
 
 
     $_SESSION['portal'] = $portal;
@@ -58,8 +59,8 @@
             
             // Step 3. Get the user's profile
             $resourceOwner = $provider->getResourceOwner($accessToken);
-
-            header('Location: ../home');
+            $redirectPortal = $_SESSION['portal'] ?? 'default';
+            header("Location: ./callback.php?portal=$redirectPortal");
             exit;
         } catch (\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
             exit('Failed to get access token: ' . $e->getMessage());

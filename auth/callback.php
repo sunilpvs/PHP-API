@@ -129,6 +129,17 @@
     $result = $dbObject->runSingle($query, $params, 'Fetch user ID for JWT from Microsoft OAuth');
     $userId = $result['id'];
 
+    // get allowed domains for this user
+    $query = "SELECT lower(m.module_name) as module FROM tbl_user_modules um 
+                JOIN tbl_module m 
+                ON um.module_id = m.module_id 
+                WHERE um.email=?";
+    $params = [$email];
+    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $allowedDomains = $dbObject->runQuery($query, $params, 'Fetch allowed domains for user from Microsoft OAuth');
+
+    $allowedDomains = array_column($allowedDomains, 'module'); // Extract module names into a simple array
+
     // Create custom JWT tokens
     $jwt = new JWTHandler();
     $jwtAccess = $jwt->generateAccessToken([
@@ -136,7 +147,7 @@
         "sub" => $userId,
         "username" => $email,
         "auth_provider" => "microsoft",
-        "domain" => $subDomain,
+        "allowed_domains" => $allowedDomains,
         "iat"   => time(),
         "exp"   => time() + (60 * 60 * 3)
 
@@ -148,7 +159,7 @@
         "sub" => $userId,
         "username" => $email,
         "auth_provider" => "microsoft",
-        "domain" => $subDomain,
+        "allowed_domains" => $allowedDomains,
         "iat" => time(),
         "exp" => time() + (60 * 60 * 3)
 
@@ -157,7 +168,7 @@
 
     // ✅ Set real Microsoft token for Graph requests
     setcookie("microsoft_access_token", $msAccessToken, [
-        "expires" => time() + 60 * 60 * 3, // 3 hours
+        "expires" => time() + (60 * 60 * 3), // 3 hours
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -168,7 +179,7 @@
 
     // ✅ Set your custom JWT for API auth
     setcookie("access_token", $jwtAccess, [
-        "expires" => time() + 60 * 60 * 3,
+        "expires" => time() + (60 * 60 * 3),
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -177,7 +188,7 @@
     ]);
 
     setcookie("refresh_token", $jwtRefresh, [
-        "expires" => time() + 60 * 60 * 3,
+        "expires" => time() + (60 * 60 * 3),
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -185,16 +196,17 @@
         "samesite" => "None",
     ]);
 
-   
+   $redirectPortal = $_GET['portal'] ?? $_SESSION['portal'] ?? 'default';
 
     $redirectMap = [
+        'default' => $_ENV['INTERNAL_PORTAL_URL'],
         'admin' => $_ENV['ADMIN_PORTAL_URL'],
         'vms' => $_ENV['VMS_PORTAL_URL'],
         'ams' => $_ENV['AMS_PORTAL_URL']
     ];
     
     // Redirect to frontend
-    $redirectURI = $redirectMap[$subDomain];
+    $redirectURI = $redirectMap[$redirectPortal] ?? $redirectMap['default'];
     header("Location: $redirectURI");
     exit;
 

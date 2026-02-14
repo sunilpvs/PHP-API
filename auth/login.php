@@ -40,6 +40,9 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 $portal = $_GET['portal'] ?? 'vendor';
 
+// convert the portal to list of allowed domains for cookie
+$allowedDomains = [$portal]; 
+
 if (!isset($_GET['portal'])) {
     http_response_code(400);
     echo json_encode(["error" => "Portal parameter is required"]);
@@ -73,6 +76,8 @@ if ($portal === 'ams') {
     echo json_encode(["error" => "You cant login to ams portal using username and password. Please use Microsoft SSO"]);
     exit();
 }
+
+
 
 $username = $input['username'] ?? '';
 $password = $input['password'] ?? '';
@@ -120,7 +125,7 @@ if ($verify) {
     $payload = [
         "username" => $row['email'],
         "sub" => $row['id'],
-        "domain" => $portal,
+        "allowed_domains" => $allowedDomains,
         "iat" => time(),
         "exp" => time() + (60 * 100) // Access token valid for 100 minutes
     ];
@@ -131,20 +136,23 @@ if ($verify) {
     $access_token = $jwt->generateAccessToken([
         "sub" => $row['id'],
         "username" => $row['email'],
-        "domain" => $portal,
+        "allowed_domains" => $allowedDomains,
         "iat" => time(),
         "exp" => time() + (60 * 100) // Access token valid for 100 minutes
     ]);
+    var_dump($access_token);
 
 
 
     $refreshToken = $jwt->generateRefreshToken([
         "sub" => $row['id'],
         "username" => $row['email'],
-        "domain" => $portal,
+        "allowed_domains" => $allowedDomains,
         "iat" => time(),
         "exp" => time() + (60 * 60 * 24 * 7) // Refresh token valid for 7 days
     ]);
+
+    var_dump($refreshToken);
 
 
     // echo $access_token;
@@ -161,6 +169,8 @@ if ($verify) {
         $responseData["access_token"] = $access_token;
         $responseData["refresh_token"] = $refreshToken;
     } else {
+
+        //  set access token, refresh token and domain as cookie domain
         setcookie(
             "access_token",
             $access_token,

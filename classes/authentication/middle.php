@@ -37,20 +37,22 @@ function authenticateJWT() {
     
     $jwt = new JWTHandler();
     $verified = $jwt->verifyToken($token);
-    $portal = $verified->domain ?? null;
+    $allowed_domains = $verified->allowed_domains ?? null;
 
     if($verified === false){
         http_response_code(401);
         echo json_encode(["error" => "Invalid or expired token"]);
         exit;
     }
-    if (!$portal) {
+
+    if (!$allowed_domains) {
         http_response_code(401);
-        echo json_encode(["error" => "Portal not found in token"]);
+        echo json_encode(["error" => "Allowed domains not found in token"]);
         exit();
     }
+    
 
-    if(!in_array($portal, $portals)) {
+    if($allowed_domains && empty(array_intersect($allowed_domains, $portals))) {
         http_response_code(401);
         echo json_encode(["error" => "Invalid portal in token"]);
         exit();

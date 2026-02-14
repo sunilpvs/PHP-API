@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 
-function verifyToken($middleware_portal) {
+function verifyToken() {
 
     $jwt = new JWTHandler();
 
@@ -33,7 +33,7 @@ function verifyToken($middleware_portal) {
 
     $verified = $jwt->verifyToken($token);
     $user = $verified->username ?? null;
-    $portal = $verified->domain ?? null;
+    $allowed_domains = $verified->allowed_domains ?? null;
 
     if (!$user) {
         http_response_code(401);
@@ -41,9 +41,9 @@ function verifyToken($middleware_portal) {
         exit();
     }
 
-    if (!$portal) {
+    if (!$allowed_domains) {
         http_response_code(401);
-        echo json_encode(["error" => "Portal not found"]);
+        echo json_encode(["error" => "Allowed domains not found"]);
         exit();
     }
 
@@ -53,17 +53,14 @@ function verifyToken($middleware_portal) {
         exit();
     }
 
-    if(!in_array($portal, $portals)) {
+    if(empty(array_intersect($allowed_domains, $portals))) {
         http_response_code(401);
-        echo json_encode(["error" => "Invalid portal in token"]);
+        echo json_encode(["error" => "Invalid allowed domains in token"]);
         exit();
     }
 
-    if($portal !== $middleware_portal){
-        http_response_code(401);
-        echo json_encode(["error" => "Portal mismatch"]);
-        exit();
-    }
+    
+    
     $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
     http_response_code(200);
     echo json_encode(["message" => "Access granted"]);

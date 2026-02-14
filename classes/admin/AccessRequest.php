@@ -2,31 +2,33 @@
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
 require $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/GraphAutoMailer.php';
-require $_SERVER['DOCUMENT_ROOT']."/vendor/autoload.php";
+require $_SERVER['DOCUMENT_ROOT'] . "/vendor/autoload.php";
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/vms/Rfq.php';
 
 
 use Dotenv\Dotenv;
 
 $env = getenv('APP_ENV') ?: 'local';
-    if($env === 'production'){
-        $dotenv = Dotenv::createImmutable(__DIR__ . '/../../', '.env.prod');
-    }else{
-        $dotenv= Dotenv::createImmutable(__DIR__ . '/../../', '.env');
-    }
+if ($env === 'production') {
+    $dotenv = Dotenv::createImmutable(__DIR__ . '/../../', '.env.prod');
+} else {
+    $dotenv = Dotenv::createImmutable(__DIR__ . '/../../', '.env');
+}
 
 $dotenv->load();
 
 
-class AccessRequest {
+class AccessRequest
+{
     private $conn;
     private $logger;
     private $app_url;
     private $vms_url;
     private $rfqData;
-    
 
-    public function __construct() {
+
+    public function __construct()
+    {
         // $this->mailer = new AutoMail();
         $this->conn = new DBController();
         $this->rfqData = new Rfq();
@@ -37,10 +39,10 @@ class AccessRequest {
         $this->logger = new Logger($debugMode, $logDir);
         $this->app_url = $_ENV['ADMIN_PORTAL_URL'] ?? '';
         $this->vms_url = $_ENV['VMS_PORTAL_URL'] ?? '';
-        
     }
 
-    public function getAllAccessRequests($module, $username) {
+    public function getAllAccessRequests($module, $username)
+    {
         $query = "SELECT concat(a.f_name,' ',a.l_name) AS requestor_name, b.module_name AS module, c.status AS status, d.email FROM tbl_access_requests d
                         JOIN tbl_contact a ON d.contact_id = a.id 
                         JOIN tbl_module b ON d.requested_module = b.module_id
@@ -49,7 +51,8 @@ class AccessRequest {
         return $this->conn->runQuery($query);
     }
 
-    public function getPaginatedAccessRequests($module, $username, $limit, $offset) {
+    public function getPaginatedAccessRequests($module, $username, $limit, $offset)
+    {
         $query = "SELECT concat(a.f_name,' ',a.l_name) AS requestor_name, b.module_name AS module, c.status AS status, d.email FROM tbl_access_requests d
                         JOIN tbl_contact a ON d.contact_id = a.id 
                         JOIN tbl_module b ON d.requested_module = b.module_id
@@ -59,13 +62,15 @@ class AccessRequest {
         return $this->conn->runQuery($query);
     }
 
-    public function getAccessRequestById($request_id, $module, $username) {
+    public function getAccessRequestById($request_id, $module, $username)
+    {
         $query = "SELECT * FROM tbl_access_requests WHERE id = ?";
         $this->logger->logQuery($query, [$request_id], 'classes', $module, $username);
         return $this->conn->runSingle($query, [$request_id]);
     }
 
-    public function getAllUsers($module, $username) {
+    public function getAllUsers($module, $username)
+    {
         $query = "SELECT concat(a.f_name,' ',a.l_name) as username, b.email as user_email, c.module_name as access_level, b.module_id as module_id, d.user_role as user_role from tbl_user_modules b
                     join tbl_module c on b.module_id = c.module_id
                     join tbl_users user on b.user_id = user.id 
@@ -75,7 +80,8 @@ class AccessRequest {
         return $this->conn->runQuery($query);
     }
 
-    public function getPaginatedUsers($module, $username, $limit, $offset) {
+    public function getPaginatedUsers($module, $username, $limit, $offset)
+    {
         $query = "SELECT concat(a.f_name,' ',a.l_name) as username, b.email as user_email, c.module_name as access_level, b.module_id as module_id, d.user_role as user_role from tbl_user_modules b
                     join tbl_module c on b.module_id = c.module_id
                     join tbl_users user on b.user_id = user.id 
@@ -86,29 +92,32 @@ class AccessRequest {
         return $this->conn->runQuery($query,);
     }
 
-    public function getTotalUsersCount($module, $username) {
+    public function getTotalUsersCount($module, $username)
+    {
         $query = "SELECT COUNT(*) AS total FROM tbl_user_modules WHERE enabled=1";
         $this->logger->logQuery($query, [], 'classes', $module, $username);
         $result = $this->conn->runSingle($query);
         return isset($result['total']) ? (int)$result['total'] : 0;
     }
 
-    public function getITAdminEmails($module='Access Request', $username='guest') {
+    public function getITAdminEmails($module = 'Access Request', $username = 'guest')
+    {
         $emails = "";
-        $query = "SELECT email FROM tbl_user_modules WHERE user_role_id = 2"; 
+        $query = "SELECT email FROM tbl_user_modules WHERE user_role_id = 2";
         $this->logger->logQuery($query, [], 'classes', 'Access request', 'guest');
         $results = $this->conn->runQuery($query);
         if (is_array($results) && count($results) > 0) {
             foreach ($results as $row) {
                 if (isset($row['email'])) {
-                    $emails .= "".$row['email'] . ",";
+                    $emails .= "" . $row['email'] . ",";
                 }
             }
         }
         return rtrim($emails, ',');
     }
 
-    public function checkExistingAdminRequest($email, $module, $username) {
+    public function checkExistingAdminRequest($email, $module, $username)
+    {
         // 1 for admin module
         $query = "SELECT COUNT(*) AS total FROM tbl_access_requests WHERE email = ? AND requested_module = 1";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -116,7 +125,8 @@ class AccessRequest {
         return isset($result['total']) ? (int)$result['total'] : 0;
     }
 
-    public function checkExistingVmsRequest($email, $module, $username) {
+    public function checkExistingVmsRequest($email, $module, $username)
+    {
         // 4 for vms module
         $query = "SELECT COUNT(*) AS total FROM tbl_access_requests WHERE email = ? AND requested_module = 4";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -124,14 +134,25 @@ class AccessRequest {
         return isset($result['total']) ? (int)$result['total'] : 0;
     }
 
-    public function getAccessRequestsCount($module, $username) {
+    public function checkExistingAmsRequest($email, $module, $username)
+    {
+        // 5 for ams module
+        $query = "SELECT COUNT(*) AS total FROM tbl_access_requests WHERE email = ? AND requested_module = 5";
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        return isset($result['total']) ? (int)$result['total'] : 0;
+    }
+
+    public function getAccessRequestsCount($module, $username)
+    {
         $query = 'SELECT COUNT(*) AS total FROM tbl_access_requests';
         $this->logger->logQuery($query, [], 'classes', $module, $username);
         $result = $this->conn->runQuery($query);
         return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
     }
 
-    public function getPendingAccessRequestsCount($module, $username) {
+    public function getPendingAccessRequestsCount($module, $username)
+    {
         $query = "SELECT COUNT(*) AS total FROM tbl_access_requests WHERE status = 8";
         $this->logger->logQuery($query, [], 'classes', $module, $username);
         $result = $this->conn->runQuery($query);
@@ -139,7 +160,8 @@ class AccessRequest {
     }
 
     // Under Maintenance: get name from the users table
-    public function getRequestorNameByEmail($email, $module, $username) {
+    public function getRequestorNameByEmail($email, $module, $username)
+    {
         $query = "SELECT a.f_name, a.l_name FROM tbl_contact a
                   WHERE a.email = ?";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -148,25 +170,27 @@ class AccessRequest {
         return $emp_name;
     }
 
-    public function deleteUser($email, $user_module_id, $module, $username) {
+    public function deleteUser($email, $user_module_id, $module, $username)
+    {
         $query = "DELETE FROM tbl_user_modules WHERE email = ? AND module_id = ?";
         $this->logger->logQuery($query, [$email, $user_module_id], 'classes', $module, $username);
         $deletedId = $this->conn->delete($query, [$email, $user_module_id], 'User module access deleted');
-        if(!$deletedId){
+        if (!$deletedId) {
             return false;
         }
 
         $query = "UPDATE tbl_access_requests SET status = 8, approver_id = NULL, approver_name = NULL, approver_email = NULL WHERE email = ? AND requested_module = ?";
         $this->logger->logQuery($query, [$email, $user_module_id], 'classes', $module, $username);
         $updatedId = $this->conn->update($query, [$email, $user_module_id], 'Access request status reset');
-        if(!$updatedId){
+        if (!$updatedId) {
             return false;
         }
 
-        return true;    
+        return true;
     }
 
-    public function checkVendorStatus($email, $module, $username) {
+    public function checkVendorStatus($email, $module, $username)
+    {
         // 4 for vms module
         $query = "SELECT COUNT(*) AS total FROM tbl_user_modules WHERE email = ? AND module_id = 4";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -175,28 +199,32 @@ class AccessRequest {
     }
 
 
-    public function checkUserModuleExist($email, $module_id, $module, $username) {
+    public function checkUserModuleExist($email, $module_id, $module, $username)
+    {
         $query = "SELECT COUNT(*) AS total FROM tbl_user_modules WHERE email = ? AND module_id = ?";
         $this->logger->logQuery($query, [$email, $module_id], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$email, $module_id]);
         return isset($result['total']) ? (int)$result['total'] : 0;
     }
 
-    public function getContactIdfromEmail($email, $module, $username) {
+    public function getContactIdfromEmail($email, $module, $username)
+    {
         $query = "SELECT id FROM tbl_contact WHERE email = ?";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$email]);
         return $result ? $result['id'] : null;
     }
 
-    public function getUserIdfromEmail($email, $module, $username){
+    public function getUserIdfromEmail($email, $module, $username)
+    {
         $query = "SELECT id FROM tbl_users WHERE email = ?";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$email]);
         return $result ? $result['id'] : null;
     }
 
-    public function insertAccessRequest($requester_email, $contactId, $requested_module,  $module, $username) {
+    public function insertAccessRequest($requester_email, $contactId, $requested_module,  $module, $username)
+    {
         $query = 'INSERT INTO tbl_access_requests (
                     email, contact_id, requested_module, status) 
                     VALUES (?, ?, ?, 8)';
@@ -210,12 +238,14 @@ class AccessRequest {
         $mailer = new AutoMail();
         $emp_name = self::getRequestorNameByEmail($requester_email, $module, $username);
 
-        if($requested_module == 4){
+        if ($requested_module == 4) {
             $requested_module_name = "Vendor Management System";
-        } else if($requested_module == 1){
+        } else if ($requested_module == 1) {
             $requested_module_name = "Admin Portal";
-        } else if($requested_module == 3){ 
+        } else if ($requested_module == 3) {
             $requested_module_name = "Warehouse Management System";
+        } else if ($requested_module == 5) {
+            $requested_module_name = "Asset Management System";
         } else {
             $requested_module_name = "Unknown Module";
         }
@@ -242,29 +272,30 @@ class AccessRequest {
         );
         // echo $response;
 
-        if($response){
+        if ($response) {
             $updateQuery = 'UPDATE tbl_access_requests SET status = 8 WHERE id = ?';
             $this->logger->logQuery($updateQuery, [$insertId], 'classes', $module, $username);
             $updatedId = $this->conn->update($updateQuery, [$insertId], 'Email sent status updated');
         }
-   
+
         // send a confirmation email to the requester
 
-        if($insertId && $response){
+        if ($insertId && $response) {
             return $insertId;
         } else {
             return false;
         }
     }
 
-    public function updateAccessRequestStatus($request_id, $user_role_id ,$status, $module, $username) {
+    public function updateAccessRequestStatus($request_id, $user_role_id, $status, $module, $username)
+    {
         $query = "SELECT a.email, a.requested_module as requested_module_id, b.module_name AS requested_module FROM tbl_access_requests a 
                     JOIN tbl_module b ON a.requested_module = b.module_id WHERE a.id = ?";
         $this->logger->logQuery($query, [$request_id], 'classes', $module, $username);
         $requestDetails = $this->conn->runSingle($query, [$request_id]);
 
         if (!$requestDetails) {
-            return false;  
+            return false;
         }
 
         // Requestor Details
@@ -279,20 +310,20 @@ class AccessRequest {
 
         if ($status == 11) {
             $statusMessage = 'approved';
-            $statusCode = 11;  
+            $statusCode = 11;
         } elseif ($status == 12) {
             $statusMessage = 'rejected';
-            $statusCode = 12;  
+            $statusCode = 12;
         } else {
-            return false; 
+            return false;
         }
 
         $updateQuery = "UPDATE tbl_access_requests SET status = ?, approver_id = ?, approver_name = ?, approver_email = ?  WHERE id = ?";
-        $this->logger->logQuery($updateQuery, [$statusCode, $approver_id, $approver_name, $approver_email, $request_id, ], 'classes', $module, $username);
+        $this->logger->logQuery($updateQuery, [$statusCode, $approver_id, $approver_name, $approver_email, $request_id,], 'classes', $module, $username);
         $updatedId = $this->conn->update($updateQuery, [$statusCode, $approver_id, $approver_name, $approver_email, $request_id], 'Updated access request status');
 
         // If approved, update the user's module and role
-        if($updatedId && $status == 11){
+        if ($updatedId && $status == 11) {
             $userId = self::getUserIdfromEmail($requestor_email, $module, $username);
             $query = "INSERT INTO tbl_user_modules(user_id, email, module_id, user_role_id, created_by, enabled)
                         VALUES(?, ?, $requested_module_id, ?, ?, 1)";
@@ -300,27 +331,37 @@ class AccessRequest {
             $params = [$userId, $requestor_email, $user_role_id, $username];
             $logMessage = 'User module and role assigned upon access approval';
             $insertId = $this->conn->insert($query, $params, $logMessage);
-        }else if($updatedId && $status == 12){
+        } else if ($updatedId && $status == 12) {
             // If rejected, no changes to user modules
         }
-        
-        
+
+        if($requested_module_id == 4){
+            $requested_module_name = "Vendor Management System";
+        } else if($requested_module_id == 1){
+            $requested_module_name = "Admin Portal";
+        } else if($requested_module_id == 3){
+            $requested_module_name = "Warehouse Management System";
+        } else if($requested_module_id == 5){
+            $requested_module_name = "Asset Management System";
+        } else {
+            $requested_module_name = "Unknown Module";
+        }
+
         // Get the Requestor Name
         $req_name = self::getRequestorNameByEmail($requestor_email, $module, $username);
 
         // Send email to the requestor about the status update
-        if($statusMessage == 'approved'){
+        if ($statusMessage == 'approved') {
             $keyValueData = [
-                "Message" =>  "Your request for access to the $requested_module - Vendor Management System has been $statusMessage. 
+                "Message" =>  "Your request for access to the $requested_module - $requested_module_name has been $statusMessage. 
                                 Please login to the system to view the status of your requests.",
                 "Employee Name" => $req_name,
-                
+
                 "VMS Portal Link" => $this->vms_url,
             ];
-
         } else {
             $keyValueData = [
-                "Message" => "Your request for access to the $requested_module - Vendor Management System has been $statusMessage. 
+                "Message" => "Your request for access to the $requested_module - $requested_module_name has been $statusMessage. 
                                 For more details, please contact the IT department.",
                 "Employee Name" => $req_name,
             ];
@@ -343,11 +384,12 @@ class AccessRequest {
             return true;
         }
 
-        return false; 
+        return false;
     }
 
 
-    public function getAdminAccessStatus($email, $module, $username){
+    public function getAdminAccessStatus($email, $module, $username)
+    {
         // 1 for admin module
         $query = "SELECT b.status FROM tbl_access_requests a JOIN tbl_status b ON a.status = b.id WHERE email = ? AND requested_module = 1 ";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -355,7 +397,8 @@ class AccessRequest {
         return $result ? $result['status'] : null;
     }
 
-    public function getVmsAccessStatus($email, $module, $username){
+    public function getVmsAccessStatus($email, $module, $username)
+    {
         // 4 for vms module
         $query = "SELECT b.status FROM tbl_access_requests a JOIN tbl_status b ON a.status = b.id WHERE email = ? AND requested_module = 4";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -363,15 +406,43 @@ class AccessRequest {
         return $result ? $result['status'] : null;
     }
 
+    public function getAmsAccessStatus($email, $module, $username)
+    {
+        // 5 for ams module
+        $query = "SELECT b.status FROM tbl_access_requests a JOIN tbl_status b ON a.status = b.id WHERE email = ? AND requested_module = 5";
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        return $result ? $result['status'] : null;
+    }
 
-    public function checkVmsAccess($email, $module, $username){
+    public function checkDefaultAccess($email, $module, $username)
+    {
+        // Default access for internal (home) portal
+        // module id 2 - default, role id 5 - base employee 
+        $query = "SELECT COUNT(*) AS access FROM tbl_user_modules WHERE email = ? AND module_id = 2 AND user_role_id IN(5)";
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        return isset($result['access']) ? (int)$result['access'] : 0;
+    }
+
+    public function checkVmsAccess($email, $module, $username)
+    {
         $query = "SELECT COUNT(*) AS access FROM tbl_user_modules WHERE email = ? AND module_id = 4 AND user_role_id IN (6,7)";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$email]);
         return isset($result['access']) ? (int)$result['access'] : 0;
     }
 
-    public function checkAdminAccess($email, $module, $username){
+    public function checkAmsAccess($email, $module, $username)
+    {
+        $query = "SELECT COUNT(*) AS access FROM tbl_user_modules WHERE email = ? AND module_id = 5 AND user_role_id IN (9,10)";
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        return isset($result['access']) ? (int)$result['access'] : 0;
+    }
+
+    public function checkAdminAccess($email, $module, $username)
+    {
         $query = "SELECT COUNT(*) AS access FROM tbl_user_modules WHERE email = ? AND module_id = 1 AND user_role_id IN(1,2)";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$email]);
@@ -379,24 +450,22 @@ class AccessRequest {
     }
 
 
-    public function getPendingAccessRequests($module, $username){
+    public function getPendingAccessRequests($module, $username)
+    {
         $query = "SELECT a.module_name AS requested_module, b.id, b.email, concat(c.f_name, ' ',c.l_name) AS requestor_name FROM tbl_access_requests b 
                     JOIN tbl_contact c ON b.contact_id = c.id
                     JOIN tbl_module a ON b.requested_module = a.module_id
-                    WHERE b.status=8"; 
-      
+                    WHERE b.status=8";
+
         $this->logger->logQuery($query, [], 'classes', 'Access request', 'guest');
         return $this->conn->runQuery($query);
     }
 
-    public function getRoleIdFromEmail($email, $module, $username){
+    public function getRoleIdFromEmail($email, $module, $username)
+    {
         $query = "SELECT DISTINCT(user_role_id) AS user_role FROM tbl_user_modules WHERE email = ?";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         $result = $this->conn->runQuery($query, [$email]);
         return isset($result[0]['user_role']) ? (int)$result[0]['user_role'] : null;
     }
-
 }
-
-
-?>
