@@ -1,6 +1,8 @@
 <?php
     // Set timezone to UTC for consistent JWT expiry handling
     date_default_timezone_set('UTC');
+
+    session_start();
     
     require __DIR__.'../../vendor/autoload.php';
     use League\OAuth2\Client\Provider\GenericProvider;
@@ -59,7 +61,7 @@
             
             // Step 3. Get the user's profile
             $resourceOwner = $provider->getResourceOwner($accessToken);
-            $redirectPortal = $_SESSION['portal'] ?? 'default';
+            $redirectPortal = $_GET['state'] ?? $_SESSION['portal'] ?? 'default';
             header("Location: ./callback.php?portal=$redirectPortal");
             exit;
         } catch (\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
