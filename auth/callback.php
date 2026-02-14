@@ -196,17 +196,17 @@
         "samesite" => "None",
     ]);
 
-   $redirectPortal = $_GET['portal'] ?? $_SESSION['portal'] ?? 'internal';
+   $redirectPortal = $_GET['portal'] ?? $_SESSION['portal'] ?? 'default';
 
     $redirectMap = [
-        'internal' => $_ENV['INTERNAL_PORTAL_URL'],
+        'default' => $_ENV['INTERNAL_PORTAL_URL'],
         'admin' => $_ENV['ADMIN_PORTAL_URL'],
         'vms' => $_ENV['VMS_PORTAL_URL'],
         'ams' => $_ENV['AMS_PORTAL_URL']
     ];
     
     // Redirect to frontend
-    $redirectURI = $redirectMap[$redirectPortal] ?? $redirectMap['internal'];
+    $redirectURI = $redirectMap[$redirectPortal] ?? $redirectMap['default'];
     header("Location: $redirectURI");
     exit;
 

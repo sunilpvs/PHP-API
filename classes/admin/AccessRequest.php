@@ -415,6 +415,15 @@ class AccessRequest
         return $result ? $result['status'] : null;
     }
 
+    public function checkDefaultAccess($email, $module, $username)
+    {
+        // Default access for internal (home) portal
+        // module id 2 - default, role id 5 - base employee 
+        $query = "SELECT COUNT(*) AS access FROM tbl_user_modules WHERE email = ? AND module_id = 2 AND user_role_id IN(5)";
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        return isset($result['access']) ? (int)$result['access'] : 0;
+    }
 
     public function checkVmsAccess($email, $module, $username)
     {
