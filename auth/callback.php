@@ -140,6 +140,32 @@
 
     $allowedDomains = array_column($allowedDomains, 'module'); // Extract module names into a simple array
 
+
+    // get expiry time from Microsoft token response and normalize to a valid future Unix epoch
+    $now = time();
+    $msTokenExpiryEpoch = null;
+
+    if (isset($tokens->expires_on)) {
+        $expiresOn = $tokens->expires_on;
+
+        if (is_numeric($expiresOn)) {
+            $parsedExpiry = (int) $expiresOn;
+            $msTokenExpiryEpoch = $parsedExpiry;
+        } else {
+            $parsedExpiry = strtotime((string) $expiresOn);
+            if ($parsedExpiry !== false) {
+                $msTokenExpiryEpoch = $parsedExpiry;
+            }
+        }
+    }
+
+    if ($msTokenExpiryEpoch === null && isset($tokens->expires_in) && is_numeric($tokens->expires_in)) {
+        $msTokenExpiryEpoch = $now + (int) $tokens->expires_in;
+    }
+
+    $sessionExpiryEpoch = $msTokenExpiryEpoch;
+
+
     // Create custom JWT tokens
     $jwt = new JWTHandler();
     $jwtAccess = $jwt->generateAccessToken([
@@ -148,10 +174,10 @@
         "username" => $email,
         "auth_provider" => "microsoft",
         "allowed_domains" => $allowedDomains,
-        "iat"   => time(),
-        "exp"   => time() + (60 * 60 * 3)
+        "iat"   => $now,
+        "exp"   => $sessionExpiryEpoch
 
-    ]); // 3 hours
+    ]);
 
 
     $jwtRefresh = $jwt->generateRefreshToken([
@@ -160,15 +186,16 @@
         "username" => $email,
         "auth_provider" => "microsoft",
         "allowed_domains" => $allowedDomains,
-        "iat" => time(),
-        "exp" => time() + (60 * 60 * 3)
+        "iat" => $now,
+        "exp" => $sessionExpiryEpoch
 
-    ]); // 3 hours
+    ]);
 
+    
 
     // ✅ Set real Microsoft token for Graph requests
     setcookie("microsoft_access_token", $msAccessToken, [
-        "expires" => time() + (60 * 60 * 3), // 3 hours
+        "expires" => $sessionExpiryEpoch,
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -179,7 +206,7 @@
 
     // ✅ Set your custom JWT for API auth
     setcookie("access_token", $jwtAccess, [
-        "expires" => time() + (60 * 60 * 3),
+        "expires" => $sessionExpiryEpoch,
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
@@ -188,7 +215,7 @@
     ]);
 
     setcookie("refresh_token", $jwtRefresh, [
-        "expires" => time() + (60 * 60 * 3),
+        "expires" => $sessionExpiryEpoch,
         "path" => "/",
         "secure" => true,
         "domain" => $cookieDomain,
