@@ -122,7 +122,7 @@ class Rfq
         //Generating Reference ID
         $reference_id = $this->generateReferenceId($entity_id);
 
-        //Create Vendaor Contact using Name, Email and Mobile
+        //Create Vendor Contact using Name, Email and Mobile
         //insert into tbl_contact  contact type = vendor , name = name, email, mobile
         $query = "INSERT INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
                     VALUES (?, ?, ?, ?, 1, 1, 1, 1, 6, 14, ?, 5, ?, ?)";

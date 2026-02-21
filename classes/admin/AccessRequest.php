@@ -85,7 +85,7 @@ class AccessRequest
         $query = "SELECT concat(a.f_name,' ',a.l_name) as username, b.email as user_email, c.module_name as access_level, b.module_id as module_id, d.user_role as user_role from tbl_user_modules b
                     join tbl_module c on b.module_id = c.module_id
                     join tbl_users user on b.user_id = user.id 
-                    join tbl_contact a on user.email = a.email
+                    join tbl_contact a on user.contact_id = a.id
                     join tbl_user_role d on b.user_role_id = d.id WHERE b.enabled=1 AND user.id NOT IN (1,2) 
                     LIMIT $limit OFFSET $offset ";
         $this->logger->logQuery($query, [$limit, $offset], 'classes', $module, $username);
