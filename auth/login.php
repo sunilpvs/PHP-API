@@ -140,7 +140,6 @@ if ($verify) {
         "iat" => time(),
         "exp" => time() + (60 * 100) // Access token valid for 100 minutes
     ]);
-    var_dump($access_token);
 
 
 
@@ -152,7 +151,6 @@ if ($verify) {
         "exp" => time() + (60 * 60 * 24 * 7) // Refresh token valid for 7 days
     ]);
 
-    var_dump($refreshToken);
 
 
     // echo $access_token;
