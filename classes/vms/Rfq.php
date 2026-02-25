@@ -18,7 +18,7 @@ class Rfq
         $this->conn = new DBController();
         $config = parse_ini_file(__DIR__ . '/../../app.ini');
         $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
-        $logDir = __DIR__. '/../logs';
+        $logDir = __DIR__ . '/../logs';
         $this->logger = new Logger($debugMode, $logDir);
         $this->vendorLoginUrl = $config['vendor_login_url'];
         $this->yourEmail = $config['app_email'];
@@ -147,7 +147,7 @@ class Rfq
         $this->logger->logQuery($query, $params, 'classes', $module, $username);
         $moduleId = $this->conn->insert($query, $params, 'Vendor user module access created');
 
-         // Inserting RFQ data.
+        // Inserting RFQ data.
         $query = "INSERT INTO vms_rfqs (reference_id, vendor_name, contact_name, email, mobile, entity_id, status, user_id, email_sent, created_by)
                   VALUES (?, ?, ?, ?, ?, ?, 7, ?, false, ?)";
         $params = [$reference_id, $vendor_name, $contact_name, $email, $mobile, $entity_id, $userId, $created_by];
@@ -201,10 +201,87 @@ class Rfq
         }
     }
 
-    // re-initiate RFQ if vendor is expired after initial submission
-    public function reinitiateRfq($id, $last_updated, $module, $username) {}
+    // ---- TEMPORARY FUNCTION BELOW ----
+    // insert RFQ function without email notification - for internal use (to dump data initially without sending emails to vendors)
+    public function insertRfqWithoutMails($vendor_name, $contact_name, $email, $mobile, $entity_id, $created_by, $module, $username, $status = 7)
+    {
+        //Generating Reference ID
+        $reference_id = $this->generateReferenceId($entity_id);
 
-    // Not needed as of now 
+        //Create Vendor Contact using Name, Email and Mobile
+        //insert into tbl_contact  contact type = vendor , name = name, email, mobile
+        $query = "INSERT IGNORE INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
+                    VALUES (?, ?, ?, ?, 1, 1, 1, 1, 6, 14, ?, 5, ?, ?)";
+        $params = [$contact_name, '', $email, $email, $mobile,  $entity_id, $username];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        $vendorContactId = $this->conn->insert($query, $params, 'Vendor contact created');
+
+        if (empty($vendorContactId)) {
+            $query = 'SELECT id FROM tbl_contact WHERE email = ? AND mobile = ? AND entity_id = ? AND contacttype_id = 5 ORDER BY id DESC LIMIT 1';
+            $params = [$email, $mobile, $entity_id];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            $existingContact = $this->conn->runSingle($query, $params);
+            $vendorContactId = $existingContact['id'] ?? null;
+        }
+
+
+        //Create user based on Vendor email.
+        $dummyPassword = "Initial@$email"; // Dummy password for initial creation, can be reset by vendor later. This is to avoid sending actual random password in emails when using this function.
+        $query = 'INSERT IGNORE INTO tbl_users(user_name, email, password, user_status, contact_id, status, entity_id, createdBy)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+        $hashedPassword = password_hash($dummyPassword, PASSWORD_BCRYPT);
+        $params = [$email, $email, $hashedPassword, 1, $vendorContactId, 'verified', $entity_id, $created_by];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        $userId = $this->conn->insert($query, $params, 'Vendor user created');
+
+        if (empty($userId)) {
+            $query = 'SELECT id FROM tbl_users WHERE email = ? ORDER BY id DESC LIMIT 1';
+            $params = [$email];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            $existingUser = $this->conn->runSingle($query, $params);
+            $userId = $existingUser['id'] ?? null;
+        }
+
+        //Insert into tbl_user_modules
+        $query = 'INSERT IGNORE INTO tbl_user_modules (user_id, email, module_id, user_role_id, enabled) 
+                    VALUES (?, ?, ?, ?, ?)';
+        $params = [$userId, $email, 4, 8, 1]; // Assuming module_id 4 is for VMS and user_role_id 8 is for VMS_VENDOR
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        $moduleId = $this->conn->insert($query, $params, 'Vendor user module access created');
+
+        $moduleLinked = !empty($moduleId);
+        if (!$moduleLinked) {
+            $query = 'SELECT id FROM tbl_user_modules WHERE email = ? AND module_id = 4 AND user_role_id = 8 LIMIT 1';
+            $params = [$email];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            $existingModule = $this->conn->runSingle($query, $params);
+            $moduleLinked = !empty($existingModule);
+        }
+
+        // Inserting RFQ data.
+        $query = "INSERT IGNORE INTO vms_rfqs (reference_id, vendor_name, contact_name, email, mobile, entity_id, status, user_id, email_sent, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, false, ?)";
+        $params = [$reference_id, $vendor_name, $contact_name, $email, $mobile, $entity_id, $status, $userId, $created_by];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        $logMessage = 'RFQ Inserted';
+        $insertId = $this->conn->insert($query, $params, $logMessage);
+
+        if (!empty($insertId)) {
+            // Update email_sent flag in vms_rfqs table
+            $updateQuery = 'UPDATE vms_rfqs SET email_sent = true WHERE id = ?';
+            $this->logger->logQuery($updateQuery, [$insertId], 'classes', $module, $username);
+            $this->conn->update($updateQuery, [$insertId], 'RFQ email_sent updated');
+        }
+
+
+        if ($insertId && $userId && $moduleLinked && $vendorContactId) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
+    // ---- END OF TEMPORARY FUNCTION ----
 
     public function updateRfq($id, $vendor_name, $contact_name, $email, $mobile, $entity_id, $status, $expiry_date, $last_updated, $module, $username)
     {
@@ -287,7 +364,7 @@ class Rfq
         return $this->conn->runQuery($query);
     }
 
-    
+
 
     public function getAllSubmittedRfqs($module, $username)
     {
@@ -535,7 +612,7 @@ class Rfq
     // utility function for generating reference id
     public function generateReferenceId($entity_id)
     {
-        
+
         $latestId = $this->conn->runSingle("SELECT MAX(id) as max_id FROM vms_rfqs")['max_id'] ?? 0;
         $newId = $latestId + 1;
         $ccCode = $this->getCcCodeByEntityId($entity_id, 'vms', 'system');
@@ -543,7 +620,6 @@ class Rfq
             return 'RFI-' . strtoupper($ccCode) . '-' . str_pad($newId, 5, '0', STR_PAD_LEFT);
         }
         throw new Exception("CC Code not found for entity ID: $entity_id");
-        
     }
 
     public function isFormSubmittedPreviously($reference_id, $module, $username)
