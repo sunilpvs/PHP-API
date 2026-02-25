@@ -22,7 +22,8 @@ $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
 $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-$regExp = '/^[a-zA-Z0-9\s]+$/';
+// Regular expression for validating asset group names (only letters and spaces allowed with underscore, slash, hiphnen, and numbers)
+$regExp = '/^[a-zA-Z0-9_\-\/\s]+$/';
 //Front End authorization as Trusted Hosts.
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -123,7 +124,7 @@ switch ($method) {
                 }
 
                 $headerRow = $rows[1];
-                $groupColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'group');
+                $groupColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-group');
 
                 if ($groupColumn === null) {
                     http_response_code(400);
@@ -137,7 +138,7 @@ switch ($method) {
                     'regex' => $regExp,
                     'null_values' => ['', 'null'],
                     'null_reason' => 'Asset Group is empty',
-                    'invalid_reason' => 'Asset Group can only contain letters and spaces',
+                    'invalid_reason' => 'Asset Group can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
                     'duplicate_file_reason' => 'Duplicate asset group in file',
                 ]);
 

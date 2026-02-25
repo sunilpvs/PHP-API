@@ -21,7 +21,7 @@ $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
 $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-$regExp = '/^[a-zA-Z0-9\s]+$/';
+$regExp = '/^[a-zA-Z0-9_\-\/\s]+$/';
 //Front End authorization as Trusted Hosts.
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -121,6 +121,7 @@ switch ($method) {
                     break;
                 }
 
+                // Find the column index for 'brand'
                 $headerRow = $rows[1];
                 $brandColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'brand');
 
@@ -132,13 +133,15 @@ switch ($method) {
                     break;
                 }
 
+                // Analyze and validate the brand column values
                 $analysis = ExcelImportHelper::analyzeColumnValues($rows, $brandColumn, [
                     'regex' => $regExp,
                     'null_values' => ['', 'null'],
                     'null_reason' => 'Brand is empty',
-                    'invalid_reason' => 'Brand name can only contain letters and spaces',
+                    'invalid_reason' => 'Brand name can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
                     'duplicate_file_reason' => 'Duplicate brand in file',
                 ]);
+
 
                 $rowErrors = $analysis['errors'];
                 $stats = $analysis['stats'];
@@ -148,12 +151,15 @@ switch ($method) {
                     return $row['normalized'];
                 }, $validRows);
 
+                // get the existing brands in DB to check duplicates before insert
                 $existingLower = $brandObj->getExistingBrandsByNames($brandsLower, $module, $username);
                 $existingSet = array_fill_keys($existingLower, true);
+                // existingSet output is like ['brandname' => true, ...] for quick lookup
 
                 $brandsToInsert = [];
                 $skippedDuplicateDb = 0;
                 foreach ($validRows as $row) {
+                    // Check if the normalized brand name already exists in the database. if exists, skip and log as duplicate
                     if (isset($existingSet[$row['normalized']])) {
                         $skippedDuplicateDb++;
                         $rowErrors[] = [
@@ -163,11 +169,14 @@ switch ($method) {
                         ];
                         continue;
                     }
+                    // If not a duplicate, add to the insert list
                     $brandsToInsert[] = $row['value'];
                 }
 
+                // Sort row errors by row number
                 $rowErrors = ExcelImportHelper::sortRowErrors($rowErrors);
 
+                // Insert valid and non-duplicate brands into the database
                 if (!empty($brandsToInsert)) {
                     $inserted = $brandObj->insertBatchAssetBrandsFromExcel($brandsToInsert, $username);
                     if (!$inserted) {

@@ -20,6 +20,7 @@ class ExcelImportHelper
         $nullReason = $options['null_reason'] ?? 'Value is empty';
         $invalidReason = $options['invalid_reason'] ?? 'Invalid value';
         $duplicateFileReason = $options['duplicate_file_reason'] ?? 'Duplicate value in file';
+        $checkDuplicateFile = ($duplicateFileReason !== null && trim((string)$duplicateFileReason) !== '');
         $normalizer = $options['normalizer'] ?? function ($value) {
             return strtolower(trim((string)$value));
         };
@@ -66,7 +67,7 @@ class ExcelImportHelper
                 continue;
             }
 
-            if (isset($seen[$normalized])) {
+            if ($checkDuplicateFile && isset($seen[$normalized])) {
                 $stats['skipped_duplicate_file']++;
                 $errors[] = [
                     'row' => $index,

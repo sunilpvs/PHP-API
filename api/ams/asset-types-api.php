@@ -23,7 +23,7 @@ $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
 $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-$regExp = '/^[a-zA-Z0-9\s]+$/';
+$regExp = '/^[a-zA-Z0-9_\-\/\s]+$/';
 //Front End authorization as Trusted Hosts.
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -149,7 +149,7 @@ switch ($method) {
                     'regex' => $regExp,
                     'null_values' => ['', 'null'],
                     'null_reason' => 'Asset Type is empty',
-                    'invalid_reason' => 'Asset Type can only contain letters and spaces',
+                    'invalid_reason' => 'Asset Type can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
                     'duplicate_file_reason' => 'Duplicate asset type in file',
                 ]);
 
@@ -230,26 +230,23 @@ switch ($method) {
                     ];
                 }
 
-                // Check for duplicates in database (asset_type + group_id combination)
-                $combinations = array_map(function ($row) {
-                    return [
-                        'asset_type' => $row['asset_type_normalized'],
-                        'group_id' => $row['group_id'],
-                    ];
+                // Check for duplicates in database (asset_type is unique)
+                $assetTypesLower = array_map(function ($row) {
+                    return $row['asset_type_normalized'];
                 }, $rowsWithGroupIds);
 
-                $existingCombinations = $assetTypeObj->getExistingAssetTypesByNamesAndGroups($combinations, $module, $username);
+                $existingLower = $assetTypeObj->getExistingAssetTypesByNames($assetTypesLower, $module, $username);
+                $existingSet = array_fill_keys($existingLower, true);
 
                 $assetTypesToInsert = [];
                 $skippedDuplicateDb = 0;
                 foreach ($rowsWithGroupIds as $row) {
-                    $comboKey = $row['asset_type_normalized'] . '_' . $row['group_id'];
-                    if (isset($existingCombinations[$comboKey])) {
+                    if (isset($existingSet[$row['asset_type_normalized']])) {
                         $skippedDuplicateDb++;
                         $rowErrors[] = [
                             'row' => $row['row'],
                             'value' => $row['asset_type'] . ' (Group: ' . $row['asset_group'] . ')',
-                            'reason' => 'Asset Type already exists for this group',
+                            'reason' => 'Asset Type already exists',
                         ];
                         continue;
                     }
@@ -326,7 +323,7 @@ switch ($method) {
         }
 
         // check duplicate asset type
-        $existingAssetType = $assetTypeObj->isDuplicateAssetType($assetType, $groupId, $module, $username);
+        $existingAssetType = $assetTypeObj->isDuplicateAssetType($assetType, $module, $username);
         if ($existingAssetType) {
             http_response_code(409);
             $error = ["error" => "Asset Type already exists"];
@@ -397,7 +394,7 @@ switch ($method) {
         $assetType = trim($input['asset_type']);
 
         // check duplicate asset type
-        $existingAssetType = $assetTypeObj->isDuplicateAssetTypeForUpdate($id, $assetType, $groupId, $module, $username);
+        $existingAssetType = $assetTypeObj->isDuplicateAssetTypeForUpdate($id, $assetType, $module, $username);
         if ($existingAssetType) {
             http_response_code(409);
             $error = ["error" => "Asset Type already exists"];

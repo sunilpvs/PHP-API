@@ -2,7 +2,7 @@
 /* Table structure for ams_asset_group:
     CREATE TABLE ams_asset_group (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    asset_group VARCHAR(25) NOT NULL,
+    asset_group VARCHAR(25) NOT NULL UNIQUE,
     created_by INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_updated_by INT DEFAULT NULL,
@@ -204,7 +204,11 @@ class AssetGroups
             $params = [$assetGroup, $lastUpdatedBy, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset group ID $id updated to '$assetGroup' by user ID $lastUpdatedBy";
-            return $this->conn->update($query, $params, $logMessage);
+            $rows = $this->conn->update($query, $params, $logMessage);
+            if($rows === 0) {
+                return true; // No change but still valid
+            }
+            return $rows;
         } catch (Exception $e) {
             $this->logger->log('Error updating asset group: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
