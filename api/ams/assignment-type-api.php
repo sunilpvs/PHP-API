@@ -22,7 +22,7 @@ $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
 $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-$regExp = '/^[a-zA-Z0-9\s]+$/';
+$regExp = '/^[a-zA-Z0-9_\-\/\s]+$/';
 //Front End authorization as Trusted Hosts.
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -137,7 +137,7 @@ switch ($method) {
                     'regex' => $regExp,
                     'null_values' => ['', 'null'],
                     'null_reason' => 'Assignment Type is empty',
-                    'invalid_reason' => 'Assignment Type can only contain letters and spaces',
+                    'invalid_reason' => 'Assignment Type can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
                     'duplicate_file_reason' => 'Duplicate assignment type in file',
                 ]);
 

@@ -155,6 +155,32 @@ class AssetBrands
         }
     }
 
+    // get multiple brand IDs by brand names (case-insensitive), returns associative array [normalized_name => id]
+    public function getBrandIdsByNames(array $brandNames, $module, $username)
+    {
+        if (empty($brandNames)) {
+            return [];
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($brandNames), '?'));
+            $query = "SELECT id, LOWER(TRIM(brand)) AS normalized_name FROM ams_asset_brands WHERE LOWER(TRIM(brand)) IN ($placeholders)";
+            $this->logger->logQuery($query, $brandNames, 'classes', $module, $username);
+            $rows = $this->conn->runQuery($query, $brandNames);
+
+            $result = [];
+            foreach ($rows as $row) {
+                if (isset($row['normalized_name']) && isset($row['id'])) {
+                    $result[$row['normalized_name']] = (int)$row['id'];
+                }
+            }
+            return $result;
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching brand IDs by names: ' . $e->getMessage(), 'classes', $module, $username);
+            return [];
+        }
+    }
+
     // update Asset Brands
     public function updateAssetBrand($id, $brand, $last_updated_by, $module, $username)
     {
@@ -162,7 +188,12 @@ class AssetBrands
             $query = 'UPDATE ams_asset_brands SET brand = ?, last_updated_by = ? WHERE id = ?';
             $this->logger->logQuery($query, [$brand, $last_updated_by, $id], 'classes', $module, $username);
             $logMessage = "Asset brand ID $id updated to '$brand' by user ID $last_updated_by";
-            return $this->conn->update($query, [$brand, $last_updated_by, $id], $logMessage);
+            $rows = $this->conn->update($query, [$brand, $last_updated_by, $id], $logMessage);
+            if ($rows === 0) {
+                $this->logger->log("No asset brand updated for ID $id. Possible reasons: ID not found or brand name is the same.", 'classes', $module, $username);
+                return true; // Consider as success since no change is needed
+            }
+            return $rows;
         } catch (Exception $e) {
             $this->logger->log('Error updating asset brand: ' . $e->getMessage(), 'classes', $module, $username);
             return false;

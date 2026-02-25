@@ -2,7 +2,7 @@
 /*  Table structure for ams_assignment_type:
     CREATE TABLE ams_assignment_type (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    assignment_type VARCHAR(25) NOT NULL,
+    assignment_type VARCHAR(25) NOT NULL UNIQUE,
     created_by INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_updated_by INT DEFAULT NULL,
@@ -155,6 +155,32 @@ class AssignmentTypes
         }
     }
 
+    // get multiple assignment type IDs by assignment type names (case-insensitive), returns associative array [normalized_name => id]
+    public function getAssignmentTypeIdsByNames(array $assignmentTypeNames, $module, $username)
+    {
+        if (empty($assignmentTypeNames)) {
+            return [];
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($assignmentTypeNames), '?'));
+            $query = "SELECT id, LOWER(TRIM(assignment_type)) AS normalized_name FROM ams_assignment_type WHERE LOWER(TRIM(assignment_type)) IN ($placeholders)";
+            $this->logger->logQuery($query, $assignmentTypeNames, 'classes', $module, $username);
+            $rows = $this->conn->runQuery($query, $assignmentTypeNames);
+
+            $result = [];
+            foreach ($rows as $row) {
+                if (isset($row['normalized_name']) && isset($row['id'])) {
+                    $result[$row['normalized_name']] = (int)$row['id'];
+                }
+            }
+            return $result;
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching assignment type IDs by names: ' . $e->getMessage(), 'classes', $module, $username);
+            return [];
+        }
+    }
+
     // update assignment type 
     public function updateAssignmentType($id, $assignmentType, $lastUpdatedBy, $module, $username)
     {
@@ -163,7 +189,11 @@ class AssignmentTypes
             $params = [$assignmentType, $lastUpdatedBy, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Assignment type ID $id updated to '$assignmentType' by user ID $lastUpdatedBy";
-            return $this->conn->update($query, $params, $logMessage);
+            $rows = $this->conn->update($query, $params, $logMessage);
+            if($rows === 0) {
+                return true; // No change but still valid
+            }
+            return $rows;
         } catch (Exception $e) {
             $this->logger->log('Error updating assignment type: ' . $e->getMessage(), 'classes', $module, $username);
             return false;

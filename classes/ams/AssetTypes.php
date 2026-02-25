@@ -2,7 +2,7 @@
 /* Table Structure for ams_asset_type:
     CREATE TABLE ams_asset_type (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    asset_type VARCHAR(25) NOT NULL,
+    asset_type VARCHAR(25) NOT NULL UNIQUE,
     asset_group_id INT NOT NULL,
     created_by INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -104,11 +104,12 @@ class AssetTypes
     public function insertAssetType($assetType, $groupId, $createdBy, $module, $username)
     {
         try {
-            $query = 'INSERT INTO ams_asset_type (asset_type, group_id, created_by) VALUES (?, ?, ?)';
+            $query = 'INSERT INTO ams_asset_type (asset_type, asset_group_id, created_by) VALUES (?, ?, ?)';
             $params = [$assetType, $groupId, $createdBy];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset type '$assetType' inserted by user ID $createdBy";
             return $this->conn->insert($query, $params, $logMessage);
+
         } catch (Exception $e) {
             $this->logger->log('Error inserting asset type: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
@@ -157,35 +158,28 @@ class AssetTypes
         }
     }
 
-    // check if asset type + group combination exists
-    public function getExistingAssetTypesByNamesAndGroups(array $combinations, $module, $username)
+    // get multiple asset type IDs by asset type names (case-insensitive), returns associative array [normalized_name => id]
+    public function getAssetTypeIdsByNames(array $assetTypeNames, $module, $username)
     {
-        if (empty($combinations)) {
+        if (empty($assetTypeNames)) {
             return [];
         }
 
         try {
-            // Build a query to check existing combinations
-            $conditions = [];
-            $params = [];
-            foreach ($combinations as $combo) {
-                $conditions[] = '(LOWER(TRIM(asset_type)) = ? AND asset_group_id = ?)';
-                $params[] = strtolower(trim($combo['asset_type']));
-                $params[] = $combo['group_id'];
-            }
-            
-            $query = "SELECT LOWER(TRIM(asset_type)) AS asset_type, asset_group_id FROM ams_asset_type WHERE " . implode(' OR ', $conditions);
-            $this->logger->logQuery($query, $params, 'classes', $module, $username);
-            $rows = $this->conn->runQuery($query, $params);
-            
+            $placeholders = implode(',', array_fill(0, count($assetTypeNames), '?'));
+            $query = "SELECT id, LOWER(TRIM(asset_type)) AS normalized_name FROM ams_asset_type WHERE LOWER(TRIM(asset_type)) IN ($placeholders)";
+            $this->logger->logQuery($query, $assetTypeNames, 'classes', $module, $username);
+            $rows = $this->conn->runQuery($query, $assetTypeNames);
+
             $result = [];
             foreach ($rows as $row) {
-                $key = $row['asset_type'] . '_' . $row['asset_group_id'];
-                $result[$key] = true;
+                if (isset($row['normalized_name']) && isset($row['id'])) {
+                    $result[$row['normalized_name']] = (int)$row['id'];
+                }
             }
             return $result;
         } catch (Exception $e) {
-            $this->logger->log('Error checking existing asset type combinations: ' . $e->getMessage(), 'classes', $module, $username);
+            $this->logger->log('Error fetching asset type IDs by names: ' . $e->getMessage(), 'classes', $module, $username);
             return [];
         }
     }
@@ -194,11 +188,15 @@ class AssetTypes
     public function updateAssetType($id, $assetType, $groupId, $lastUpdatedBy, $module, $username)
     {
         try {
-            $query = 'UPDATE ams_asset_type SET asset_type = ?, group_id = ?, last_updated_by = ? WHERE id = ?';
+            $query = 'UPDATE ams_asset_type SET asset_type = ?, asset_group_id = ?, last_updated_by = ? WHERE id = ?';
             $params = [$assetType, $groupId, $lastUpdatedBy, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset type ID $id updated to '$assetType' by user ID $lastUpdatedBy";
-            return $this->conn->update($query, $params, $logMessage);
+            $rows = $this->conn->update($query, $params, $logMessage);
+            if ($rows === 0) {
+                return true; // Consider no rows affected as a successful update if no error occurred
+            }
+            return $rows;
         } catch (Exception $e) {
             $this->logger->log('Error updating asset type: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
@@ -223,11 +221,11 @@ class AssetTypes
     // helper methods
 
     // check duplicate asset type for insert
-    public function isDuplicateAssetType($assetType, $groupId, $module, $username)
+    public function isDuplicateAssetType($assetType, $module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_type WHERE asset_type = ? AND group_id = ?';
-            $params = [$assetType, $groupId];
+            $query = 'SELECT COUNT(*) AS total FROM ams_asset_type WHERE asset_type = ?';
+            $params = [$assetType];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $result = $this->conn->runQuery($query, $params);
             return isset($result[0]['total']) && (int)$result[0]['total'] > 0;
@@ -238,11 +236,11 @@ class AssetTypes
     }
 
     // check duplicate asset type for update
-    public function isDuplicateAssetTypeForUpdate($id, $assetType, $groupId, $module, $username)
+    public function isDuplicateAssetTypeForUpdate($id, $assetType, $module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_type WHERE asset_type = ? AND group_id = ? AND id != ?';
-            $params = [$assetType, $groupId, $id];
+            $query = 'SELECT COUNT(*) AS total FROM ams_asset_type WHERE asset_type = ? AND id != ?';
+            $params = [$assetType, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $result = $this->conn->runQuery($query, $params);
             return isset($result[0]['total']) && (int)$result[0]['total'] > 0;
@@ -252,6 +250,3 @@ class AssetTypes
         }
     }
 }
-
-
-
