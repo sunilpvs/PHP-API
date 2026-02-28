@@ -116,6 +116,7 @@ class AssetCategory
             return false;
         }
     }
+    
 
     // insert batch asset categories from excel (each row has assetCategory and groupId)
     public function insertBatchAssetCategoriesFromExcel($assetCategoriesData, $createdBy)
