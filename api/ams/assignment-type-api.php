@@ -216,7 +216,7 @@ switch ($method) {
 
         if (!preg_match($regExp, $assignmentType)) {
             http_response_code(400);
-            $error = ["error" => "Assignment Type can only contain letters and spaces"];
+            $error = ["error" => "Assignment Type can only contain letters, numbers, spaces, underscores, hyphens, and slashes"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
@@ -275,7 +275,7 @@ switch ($method) {
 
         if (!preg_match($regExp, trim($input['assignment_type']))) {
             http_response_code(400);
-            $error = ["error" => "Assignment Type can only contain letters and spaces"];
+            $error = ["error" => "Assignment Type can only contain letters, numbers, spaces, underscores, hyphens, and slashes"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;

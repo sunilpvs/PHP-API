@@ -76,6 +76,7 @@ switch ($method) {
 		http_response_code(200);
 		echo json_encode($response);
 		$logger->logRequestAndResponse($_GET, $response);
+		break;
 
 	case 'POST':
 		$logger->log("POST request received");

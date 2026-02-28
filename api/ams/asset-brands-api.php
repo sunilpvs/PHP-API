@@ -224,7 +224,7 @@ switch ($method) {
 
         if (!preg_match($regExp, $brand)) {
             http_response_code(400);
-            $error = ["error" => "Brand name can only contain letters and spaces"];
+            $error = ["error" => "Brand name can only contain letters, numbers, spaces, underscores, hyphens, and slashes"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
@@ -283,7 +283,7 @@ switch ($method) {
 
         if (!preg_match($regExp, trim($input['brand']))) {
             http_response_code(400);
-            $error = ["error" => "Asset Brand name can only contain letters and spaces"];
+            $error = ["error" => "Asset Brand name can only contain letters, numbers, spaces, underscores, hyphens, and slashes"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;

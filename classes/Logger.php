@@ -11,16 +11,61 @@ class Logger
 
     public function __construct($debugMode, $logDir)
     {
-        $this->debugMode = $debugMode;
-        $this->logDir = $logDir;
+        $this->debugMode = $this->resolveDebugMode($debugMode);
+        $this->logDir = $this->resolveLogDirectory($logDir);
 
         $this->initializeLogDirectory();
+    }
+
+    private function resolveDebugMode($debugMode)
+    {
+        if (is_bool($debugMode)) {
+            if ($debugMode === true) {
+                return true;
+            }
+        } elseif ($debugMode !== null) {
+            return in_array(strtolower(trim((string)$debugMode)), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        $configPath = $_SERVER['DOCUMENT_ROOT'] . '/app.ini';
+        if (is_file($configPath)) {
+            $config = parse_ini_file($configPath, true);
+            if (
+                is_array($config) &&
+                isset($config['generic']) &&
+                isset($config['generic']['DEBUG_MODE'])
+            ) {
+                return in_array(strtolower(trim((string)$config['generic']['DEBUG_MODE'])), ['1', 'true', 'yes', 'on'], true);
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveLogDirectory($logDir)
+    {
+        $primaryDir = rtrim((string)$logDir, '/\\');
+        if ($primaryDir !== '') {
+            return $primaryDir;
+        }
+
+        return realpath(__DIR__ . '/..') . '/logs';
     }
 
     private function initializeLogDirectory()
     {
         if (!is_dir($this->logDir)) {
-            mkdir($this->logDir, 0775, true);
+            @mkdir($this->logDir, 0775, true);
+        }
+
+        if (!is_dir($this->logDir) || !is_writable($this->logDir)) {
+            $fallbackDir = realpath(__DIR__ . '/..') . '/logs';
+            if (!is_dir($fallbackDir)) {
+                @mkdir($fallbackDir, 0775, true);
+            }
+            if (is_dir($fallbackDir) && is_writable($fallbackDir)) {
+                $this->logDir = $fallbackDir;
+            }
         }
     }
 

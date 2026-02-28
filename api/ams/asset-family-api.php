@@ -4,7 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit;
 }
 
-require_once __DIR__ . '../../../classes/ams/AssetGroups.php';
+require_once __DIR__ . '../../../classes/ams/AssetFamily.php';
 require_once __DIR__ . '../../../classes/authentication/middle.php';
 require_once __DIR__ . '../../../classes/Logger.php';
 require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
@@ -22,14 +22,14 @@ $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
 $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-// Regular expression for validating asset group names (only letters and spaces allowed with underscore, slash, hiphnen, and numbers)
+// Regular expression for validating asset family names (only letters and spaces allowed with underscore, slash, hiphnen, and numbers)
 $regExp = '/^[a-zA-Z0-9_\-\/\s]+$/';
 //Front End authorization as Trusted Hosts.
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
-$groupObj = new AssetGroups();
+$familyObj = new AssetFamily();
 $auth = new UserLogin();
 $username = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 'guest';
 
@@ -42,9 +42,9 @@ switch ($method) {
 
         if (isset($_GET['id'])) {
             $id = intval($_GET['id']);
-            $data = $groupObj->getAssetGroupById($id, $module, $username);
+            $data = $familyObj->getAssetFamilyById($id, $module, $username);
             $status = $data ? 200 : 404;
-            $response = $data ?: ["error" => "Asset Group not found"];
+            $response = $data ?: ["error" => "Asset Family not found"];
             http_response_code($status);
             echo json_encode($response);
             $logger->logRequestAndResponse($_GET, $response);
@@ -52,9 +52,9 @@ switch ($method) {
         }
 
         if (isset($_GET['type']) && $_GET['type'] === 'combo') {
-            $fields = isset($_GET['fields']) ? explode(',', $_GET['fields']) : ['id', 'group'];
+            $fields = isset($_GET['fields']) ? explode(',', $_GET['fields']) : ['id', 'family'];
             $fields = array_map('trim', $fields);
-            $data = $groupObj->getAssetGroupsCombo($module, $username);
+            $data = $familyObj->getAssetFamiliesCombo($module, $username);
             http_response_code(200);
             echo json_encode($data);
             $logger->logRequestAndResponse($_GET, $data);
@@ -64,14 +64,14 @@ switch ($method) {
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
         $offset = ($page - 1) * $limit;
-        $data = $groupObj->getPaginatedAssetGroups($limit, $offset, $module, $username);
-        $total = $groupObj->getAssetGroupCount($module, $username);
+        $data = $familyObj->getPaginatedAssetFamilies($limit, $offset, $module, $username);
+        $total = $familyObj->getAssetFamilyCount($module, $username);
 
         $response = [
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
-            'asset_groups' => $data,
+            'asset_families' => $data,
         ];
 
         http_response_code(200);
@@ -124,36 +124,36 @@ switch ($method) {
                 }
 
                 $headerRow = $rows[1];
-                $groupColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-group');
+                $familyColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-family');
 
-                if ($groupColumn === null) {
+                if ($familyColumn === null) {
                     http_response_code(400);
-                    $error = ["error" => "Asset Group column not found in header"];
+                    $error = ["error" => "Asset Family column not found in header"];
                     echo json_encode($error);
                     $logger->logRequestAndResponse(["file" => $fileName], $error);
                     break;
                 }
 
-                $analysis = ExcelImportHelper::analyzeColumnValues($rows, $groupColumn, [
+                $analysis = ExcelImportHelper::analyzeColumnValues($rows, $familyColumn, [
                     'regex' => $regExp,
                     'null_values' => ['', 'null'],
-                    'null_reason' => 'Asset Group is empty',
-                    'invalid_reason' => 'Asset Group can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
-                    'duplicate_file_reason' => 'Duplicate asset group in file',
+                    'null_reason' => 'Asset Family is empty',
+                    'invalid_reason' => 'Asset Family can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
+                    'duplicate_file_reason' => 'Duplicate asset family in file',
                 ]);
 
                 $rowErrors = $analysis['errors'];
                 $stats = $analysis['stats'];
                 $validRows = $analysis['valid_rows'];
 
-                $groupsLower = array_map(function ($row) {
+                $familiesLower = array_map(function ($row) {
                     return $row['normalized'];
                 }, $validRows);
 
-                $existingLower = $groupObj->getExistingAssetGroupsByNames($groupsLower, $module, $username);
+                $existingLower = $familyObj->getExistingAssetFamiliesByNames($familiesLower, $module, $username);
                 $existingSet = array_fill_keys($existingLower, true);
 
-                $groupsToInsert = [];
+                $familiesToInsert = [];
                 $skippedDuplicateDb = 0;
                 foreach ($validRows as $row) {
                     if (isset($existingSet[$row['normalized']])) {
@@ -161,20 +161,20 @@ switch ($method) {
                         $rowErrors[] = [
                             'row' => $row['row'],
                             'value' => $row['value'],
-                            'reason' => 'Asset Group already exists',
+                            'reason' => 'Asset Family already exists',
                         ];
                         continue;
                     }
-                    $groupsToInsert[] = $row['value'];
+                    $familiesToInsert[] = $row['value'];
                 }
 
                 $rowErrors = ExcelImportHelper::sortRowErrors($rowErrors);
 
-                if (!empty($groupsToInsert)) {
-                    $inserted = $groupObj->insertBatchAssetGroupsFromExcel($groupsToInsert, $username);
+                if (!empty($familiesToInsert)) {
+                    $inserted = $familyObj->insertBatchAssetFamiliesFromExcel($familiesToInsert, $username);
                     if (!$inserted) {
                         http_response_code(500);
-                        $error = ["error" => "Failed to import asset groups"];
+                        $error = ["error" => "Failed to import asset families from Excel"];
                         echo json_encode($error);
                         $logger->logRequestAndResponse(["file" => $fileName], $error);
                         break;
@@ -185,7 +185,7 @@ switch ($method) {
                 $response = [
                     "message" => "Excel import completed",
                     "total_rows" => $stats['total_rows'],
-                    "inserted" => count($groupsToInsert),
+                    "inserted" => count($familiesToInsert),
                     "skipped_null" => $stats['skipped_null'],
                     "skipped_invalid" => $stats['skipped_invalid'],
                     "skipped_duplicate_file" => $stats['skipped_duplicate_file'],
@@ -205,43 +205,43 @@ switch ($method) {
             }
         }
 
-        if (!isset($input['group']) || empty(trim($input['group']))) {
+        if (!isset($input['family']) || empty(trim($input['family']))) {
             http_response_code(400);
-            $error = ["error" => "Group name is required"];
+            $error = ["error" => "Asset Family name is required"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
         }
 
-        $group = trim($input['group']);
+        $family = trim($input['family']);
 
-        if (!preg_match($regExp, $group)) {
+        if (!preg_match($regExp, $family)) {
             http_response_code(400);
-            $error = ["error" => "Group name can only contain letters and spaces"];
+            $error = ["error" => "Asset Family name can only contain letters, numbers, spaces, underscores, hyphens, and slashes"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
         }
 
-        // check duplicate group
-        $existingGroup = $groupObj->isDuplicateGroup($group, $module, $username);
-        if ($existingGroup) {
+        // check duplicate family
+        $existingFamily = $familyObj->isDuplicateFamily($family, $module, $username);
+        if ($existingFamily) {
             http_response_code(409);
-            $error = ["error" => "Group name already exists"];
+            $error = ["error" => "Asset Family name already exists"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
         }
 
-        $result = $groupObj->insertAssetGroup($group, $username, $module, $username);
+        $result = $familyObj->insertAssetFamily($family, $username, $module, $username);
         if ($result) {
             http_response_code(201);
-            $response = ["message" => "Asset Group created successfully", "id" => $result];
+            $response = ["message" => "Asset Family created successfully", "id" => $result];
             echo json_encode($response);
             $logger->logRequestAndResponse($input, $response);
         } else {
             http_response_code(500);
-            $error = ["error" => "Failed to create Asset Group"];
+            $error = ["error" => "Failed to create Asset Family"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
         }
@@ -252,7 +252,7 @@ switch ($method) {
         $logger->log("PUT request received");
         if (!isset($_GET['id'])) {
             http_response_code(400);
-            $error = ["error" => "Asset Group ID is required"];
+            $error = ["error" => "Asset Family ID is required"];
             echo json_encode($error);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
             break;
@@ -260,36 +260,36 @@ switch ($method) {
 
         if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
             http_response_code(400);
-            $error = ["error" => "Asset Group ID must be a valid number"];
+            $error = ["error" => "Asset Family ID must be a valid number"];
             echo json_encode($error);
             $logger->logRequestAndResponse($_GET, $error);
             break;
         }
 
-        if (!isset($input['group']) || empty(trim($input['group']))) {
+        if (!isset($input['family']) || empty(trim($input['family']))) {
             http_response_code(400);
-            $error = ["error" => "Asset Group name is required"];
+            $error = ["error" => "Asset Family name is required"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
         }
 
-        if (!preg_match($regExp, trim($input['group']))) {
+        if (!preg_match($regExp, trim($input['family']))) {
             http_response_code(400);
-            $error = ["error" => "Asset Group name can only contain letters and spaces"];
+            $error = ["error" => "Asset Family name can only contain letters, numbers, spaces, underscores, hyphens, and slashes"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
         }
 
         $id = intval($_GET['id']);
-        $group = trim($input['group']);
+        $family = trim($input['family']);
 
-        // check duplicate group
-        $existingGroup = $groupObj->isDuplicateGroupForUpdate($id, $group, $module, $username);
-        if ($existingGroup) {
+        // check duplicate family
+        $existingFamily = $familyObj->isDuplicateFamilyForUpdate($id, $family, $module, $username);
+        if ($existingFamily) {
             http_response_code(409);
-            $error = ["error" => "Group name already exists"];
+            $error = ["error" => "Asset Family name already exists"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
@@ -297,15 +297,15 @@ switch ($method) {
 
 
 
-        $result = $groupObj->updateAssetGroup($id, $group, $username, $module, $username);
+        $result = $familyObj->updateAssetFamily($id, $family, $username, $module, $username);
         if ($result) {
             http_response_code(200);
-            $response = ["message" => "Asset Group updated successfully"];
+            $response = ["message" => "Asset Family updated successfully"];
             echo json_encode($response);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $response);
         } else {
             http_response_code(500);
-            $error = ["error" => "Failed to update Asset Group"];
+            $error = ["error" => "Failed to update Asset Family"];
             echo json_encode($error);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
         }
@@ -316,7 +316,7 @@ switch ($method) {
         $logger->log("DELETE request received");
         if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
             http_response_code(400);
-            $error = ["error" => "Asset Group ID must be a valid number"];
+            $error = ["error" => "Asset Family ID must be a valid number"];
             echo json_encode($error);
             $logger->logRequestAndResponse($_GET, $error);
             break;
@@ -324,16 +324,16 @@ switch ($method) {
 
         $id = intval($_GET['id']);
 
-        $result = $groupObj->deleteAssetGroup($id, $module, $username);
+        $result = $familyObj->deleteAssetFamily($id, $module, $username);
 
         if ($result) {
             http_response_code(200);
-            $response = ["message" => "Asset Group deleted successfully"];
+            $response = ["message" => "Asset Family deleted successfully"];
             echo json_encode($response);
             $logger->logRequestAndResponse($_GET, $response);
         } else {
             http_response_code(500);
-            $error = ["error" => "Failed to delete Asset Group"];
+            $error = ["error" => "Failed to delete Asset Family"];
             echo json_encode($error);
             $logger->logRequestAndResponse($_GET, $error);
         }

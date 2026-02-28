@@ -1,21 +1,22 @@
 <?php
-require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
-
-/* 
+/* Table Structure for ams_asset_category:
 CREATE TABLE ams_asset_category (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    asset_category VARCHAR(25) NOT NULL UNIQUE,
-    asset_type_id INT NOT NULL,
-    assignment_type_id INT NOT NULL,
+    asset_category VARCHAR(25) NOT NULL,
+    asset_family_id INT NOT NULL,
     created_by INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_updated_by INT DEFAULT NULL,
     last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (asset_type_id) REFERENCES ams_asset_type(id),
-    FOREIGN KEY (assignment_type_id) REFERENCES ams_assignment_type(id)
+    UNIQUE KEY unq_asset_category (asset_category, asset_family_id),
+    FOREIGN KEY (asset_family_id) REFERENCES ams_asset_family(id)
 );
 */
+
+
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
+
 
 class AssetCategory
 {
@@ -62,8 +63,9 @@ class AssetCategory
     {
         try {
             $query = 'SELECT * FROM ams_asset_category WHERE id = ?';
-            $this->logger->logQuery($query, [$id], 'classes', $module, $username);
-            return $this->conn->runSingle($query, [$id]);
+            $params = [$id];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            return $this->conn->runQuery($query, $params);
         } catch (Exception $e) {
             $this->logger->log('Error fetching asset category by id: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
@@ -74,13 +76,13 @@ class AssetCategory
     public function getAssetCategoryCount($module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_category';
+            $query = 'SELECT COUNT(*) AS count FROM ams_asset_category';
             $this->logger->logQuery($query, [], 'classes', $module, $username);
-            $result = $this->conn->runQuery($query);
-            return isset($result[0]['total']) ? (int)$result[0]['total'] : 0;
+            $result = $this->conn->runSingle($query);
+            return $result ? $result['count'] : 0;
         } catch (Exception $e) {
             $this->logger->log('Error fetching asset category count: ' . $e->getMessage(), 'classes', $module, $username);
-            return 0;
+            return false;
         }
     }
 
@@ -90,8 +92,8 @@ class AssetCategory
         try {
             $limit = (int)$limit;
             $offset = (int)$offset;
-            $query = "SELECT id, asset_category, asset_type_id, assignment_type_id FROM ams_asset_category LIMIT $limit OFFSET $offset";
-            $this->logger->logQuery($query, [$limit, $offset], 'classes', $module, $username);
+            $query = "SELECT * FROM ams_asset_category ORDER BY id DESC LIMIT $limit OFFSET $offset";
+            $this->logger->logQuery($query, [], 'classes', $module, $username);
             return $this->conn->runQuery($query, []);
         } catch (Exception $e) {
             $this->logger->log('Error fetching paginated asset categories: ' . $e->getMessage(), 'classes', $module, $username);
@@ -99,34 +101,35 @@ class AssetCategory
         }
     }
 
-    // insert asset category
-    public function insertAssetCategory($assetCategory, $assetTypeId, $assignmentTypeId, $createdBy, $module, $username)
+    // insert asset category 
+    public function insertAssetCategory($assetCategory, $groupId, $createdBy, $module, $username)
     {
         try {
-            $query = 'INSERT INTO ams_asset_category (asset_category, asset_type_id, assignment_type_id, created_by) VALUES (?, ?, ?, ?)';
-            $params = [$assetCategory, $assetTypeId, $assignmentTypeId, $createdBy];
-            $this->logger->logQuery($query, [], 'classes', $module, $username);
+            $query = 'INSERT INTO ams_asset_category (asset_category, asset_family_id, created_by) VALUES (?, ?, ?)';
+            $params = [$assetCategory, $groupId, $createdBy];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset category '$assetCategory' inserted by user ID $createdBy";
             return $this->conn->insert($query, $params, $logMessage);
+
         } catch (Exception $e) {
             $this->logger->log('Error inserting asset category: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
         }
     }
 
-    // insert batch asset categories from excel (each row has asset_category, asset_type_id, assignment_type_id)
-    public function insertBatchAssetCategoriesFromExcel($categoriesData, $createdBy)
+    // insert batch asset categories from excel (each row has assetCategory and groupId)
+    public function insertBatchAssetCategoriesFromExcel($assetCategoriesData, $createdBy)
     {
-        if (empty($categoriesData) || !is_array($categoriesData)) {
+        if (empty($assetCategoriesData) || !is_array($assetCategoriesData)) {
             $this->logger->log('No asset categories to insert from excel or invalid format', 'classes', 'Excel Import', 'System');
             return false;
         }
 
         try {
-            $query = 'INSERT INTO ams_asset_category (asset_category, asset_type_id, assignment_type_id, created_by) VALUES (?, ?, ?, ?)';
+            $query = 'INSERT INTO ams_asset_category (asset_category, asset_family_id, created_by) VALUES (?, ?, ?)';
             $params = [];
-            foreach ($categoriesData as $row) {
-                $params[] = [$row['asset_category'], $row['asset_type_id'], $row['assignment_type_id'], $createdBy];
+            foreach ($assetCategoriesData as $row) {
+                $params[] = [$row['asset_category'], $row['group_id'], $createdBy];
             }
             $this->logger->logQuery($query, $params, 'classes', 'Excel Import', 'System');
             return $this->conn->insertBatch($query, $params);
@@ -136,18 +139,17 @@ class AssetCategory
         }
     }
 
-    // check existing categories by name (case-insensitive)
-    public function getExistingAssetCategoriesByNames(array $categoriesLower, $module, $username)
+    public function getExistingAssetCategoriesByNames(array $assetCategoriesLower, $module, $username)
     {
-        if (empty($categoriesLower)) {
+        if (empty($assetCategoriesLower)) {
             return [];
         }
 
         try {
-            $placeholders = implode(',', array_fill(0, count($categoriesLower), '?'));
-            $query = "SELECT LOWER(TRIM(asset_category)) AS asset_category FROM ams_asset_category WHERE LOWER(TRIM(asset_category)) IN ($placeholders)";
-            $this->logger->logQuery($query, $categoriesLower, 'classes', $module, $username);
-            $rows = $this->conn->runQuery($query, $categoriesLower);
+            $placeholders = implode(',', array_fill(0, count($assetCategoriesLower), '?'));
+            $query = "SELECT LOWER(asset_category) AS asset_category FROM ams_asset_category WHERE LOWER(asset_category) IN ($placeholders)";
+            $this->logger->logQuery($query, $assetCategoriesLower, 'classes', $module, $username);
+            $rows = $this->conn->runQuery($query, $assetCategoriesLower);
             return array_values(array_filter(array_map(function ($row) {
                 return isset($row['asset_category']) ? strtolower($row['asset_category']) : null;
             }, $rows)));
@@ -157,18 +159,63 @@ class AssetCategory
         }
     }
 
-    // get multiple asset category IDs by category names (case-insensitive), returns associative array [normalized_name => id]
-    public function getAssetCategoryIdsByNames(array $categoryNames, $module, $username)
+    // check existing asset_category + asset_family_id combinations (case-insensitive asset_category)
+    // $combinations format: [['asset_category_normalized' => 'laptop', 'group_id' => 1], ...]
+    // returns array of normalized keys in the format "asset_category|group_id"
+    public function getExistingAssetCategoryCombinations(array $combinations, $module, $username)
     {
-        if (empty($categoryNames)) {
+        if (empty($combinations)) {
             return [];
         }
 
         try {
-            $placeholders = implode(',', array_fill(0, count($categoryNames), '?'));
+            $whereClauses = [];
+            $params = [];
+
+            foreach ($combinations as $combination) {
+                if (!isset($combination['asset_category_normalized']) || !isset($combination['group_id'])) {
+                    continue;
+                }
+
+                $whereClauses[] = '(LOWER(TRIM(asset_category)) = ? AND asset_family_id = ?)';
+                $params[] = strtolower(trim($combination['asset_category_normalized']));
+                $params[] = (int)$combination['group_id'];
+            }
+
+            if (empty($whereClauses)) {
+                return [];
+            }
+
+            $query = 'SELECT LOWER(TRIM(asset_category)) AS asset_category_normalized, asset_family_id FROM ams_asset_category WHERE ' . implode(' OR ', $whereClauses);
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            $rows = $this->conn->runQuery($query, $params);
+
+            $existingKeys = [];
+            foreach ($rows as $row) {
+                if (isset($row['asset_category_normalized'], $row['asset_family_id'])) {
+                    $existingKeys[] = $row['asset_category_normalized'] . '|' . (int)$row['asset_family_id'];
+                }
+            }
+
+            return array_values(array_unique($existingKeys));
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching existing asset category combinations: ' . $e->getMessage(), 'classes', $module, $username);
+            return [];
+        }
+    }
+
+    // get multiple asset category IDs by asset category names (case-insensitive), returns associative array [normalized_name => id]
+    public function getAssetCategoryIdsByNames(array $assetCategoryNames, $module, $username)
+    {
+        if (empty($assetCategoryNames)) {
+            return [];
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($assetCategoryNames), '?'));
             $query = "SELECT id, LOWER(TRIM(asset_category)) AS normalized_name FROM ams_asset_category WHERE LOWER(TRIM(asset_category)) IN ($placeholders)";
-            $this->logger->logQuery($query, $categoryNames, 'classes', $module, $username);
-            $rows = $this->conn->runQuery($query, $categoryNames);
+            $this->logger->logQuery($query, $assetCategoryNames, 'classes', $module, $username);
+            $rows = $this->conn->runQuery($query, $assetCategoryNames);
 
             $result = [];
             foreach ($rows as $row) {
@@ -184,16 +231,16 @@ class AssetCategory
     }
 
     // update asset category
-    public function updateAssetCategory($id, $assetCategory, $assetTypeId, $assignmentTypeId, $lastUpdatedBy, $module, $username)
+    public function updateAssetCategory($id, $assetCategory, $groupId, $lastUpdatedBy, $module, $username)
     {
         try {
-            $query = 'UPDATE ams_asset_category SET asset_category = ?, asset_type_id = ?, assignment_type_id = ?, last_updated_by = ? WHERE id = ?';
-            $params = [$assetCategory, $assetTypeId, $assignmentTypeId, $lastUpdatedBy, $id];
+            $query = 'UPDATE ams_asset_category SET asset_category = ?, asset_family_id = ?, last_updated_by = ? WHERE id = ?';
+            $params = [$assetCategory, $groupId, $lastUpdatedBy, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset category ID $id updated to '$assetCategory' by user ID $lastUpdatedBy";
             $rows = $this->conn->update($query, $params, $logMessage);
-            if($rows === 0) {
-                return true; // No change but still valid
+            if ($rows === 0) {
+                return true; // Consider no rows affected as a successful update if no error occurred
             }
             return $rows;
         } catch (Exception $e) {
@@ -207,9 +254,10 @@ class AssetCategory
     {
         try {
             $query = 'DELETE FROM ams_asset_category WHERE id = ?';
-            $this->logger->logQuery($query, [$id], 'classes', $module, $username);
+            $params = [$id];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset category ID $id deleted by user $username";
-            return $this->conn->delete($query, [$id], $logMessage);
+            return $this->conn->delete($query, $params, $logMessage);
         } catch (Exception $e) {
             $this->logger->log('Error deleting asset category: ' . $e->getMessage(), 'classes', $module, $username);
             return false;
@@ -219,11 +267,13 @@ class AssetCategory
     // helper methods
 
     // check duplicate asset category for insert
-    public function isDuplicateAssetCategory($assetCategory, $module, $username)
+    // check if asset category already exists for the same group 
+    // same asset category name can exist in different groups, but not in the same group
+    public function isDuplicateAssetCategory($assetCategory, $groupId, $module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_category WHERE asset_category = ?';
-            $params = [$assetCategory];
+            $query = 'SELECT COUNT(*) AS total FROM ams_asset_category WHERE LOWER(TRIM(asset_category)) = LOWER(TRIM(?)) AND asset_family_id = ?';
+            $params = [$assetCategory, $groupId];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $result = $this->conn->runQuery($query, $params);
             return isset($result[0]['total']) && (int)$result[0]['total'] > 0;
@@ -234,11 +284,13 @@ class AssetCategory
     }
 
     // check duplicate asset category for update
-    public function isDuplicateAssetCategoryForUpdate($id, $assetCategory, $module, $username)
+    // when updating, we need to exclude the current record from the duplicate check
+    // check if asset category already exists for the same group excluding the current record
+    public function isDuplicateAssetCategoryForUpdate($id, $assetCategory, $groupId, $module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_category WHERE asset_category = ? AND id != ?';
-            $params = [$assetCategory, $id];
+            $query = 'SELECT COUNT(*) AS total FROM ams_asset_category WHERE LOWER(TRIM(asset_category)) = LOWER(TRIM(?)) AND asset_family_id = ? AND id != ?';
+            $params = [$assetCategory, $groupId, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $result = $this->conn->runQuery($query, $params);
             return isset($result[0]['total']) && (int)$result[0]['total'] > 0;
@@ -248,4 +300,3 @@ class AssetCategory
         }
     }
 }
-
