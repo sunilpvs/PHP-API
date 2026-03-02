@@ -71,6 +71,19 @@ class AssetTypes
         }
     }
 
+    // get asset types by category id
+    public function getAssetTypesByCategoryId($categoryId, $module, $username){
+        try {
+            $query = 'SELECT id, asset_type FROM ams_asset_type WHERE asset_category_id = ?';
+            $params = [$categoryId];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            return $this->conn->runQuery($query, $params);
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching asset types by category id: ' . $e->getMessage(), 'classes', $module, $username);
+            return false;
+        }
+    }
+
     // get asset type count
     public function getAssetTypeCount($module, $username)
     {

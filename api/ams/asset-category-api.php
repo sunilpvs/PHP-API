@@ -62,6 +62,15 @@ switch ($method) {
             break;
         }
 
+        if (isset($_GET['family_id']) && isset($_GET['type']) && $_GET['type'] === 'filter') {
+            $familyId = intval($_GET['family_id']);
+            $data = $assetCategoryObj->getAssetCategoriesByFamilyId($familyId, $module, $username);
+            http_response_code(200);
+            echo json_encode($data);
+            $logger->logRequestAndResponse($_GET, $data);
+            break;
+        }
+
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
         $offset = ($page - 1) * $limit;

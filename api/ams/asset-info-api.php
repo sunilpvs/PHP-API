@@ -35,6 +35,7 @@ $auth = new UserLogin();
 $username = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 'guest';
 $module = 'Admin';
 
+
 switch ($method) {
 	case 'GET':
 		$logger->log("GET request received");
@@ -51,8 +52,6 @@ switch ($method) {
 		}
 
 		if (isset($_GET['type']) && $_GET['type'] === 'combo') {
-			$fields = isset($_GET['fields']) ? explode(',', $_GET['fields']) : ['id', 'asset_serial_number'];
-			$fields = array_map('trim', $fields);
 			$data = $assetInfoObj->getAssetInfoCombo($module, $username);
 			http_response_code(200);
 			echo json_encode($data);
@@ -372,17 +371,40 @@ switch ($method) {
 					$rowsWithResolvedModelIds[] = $row;
 				}
 
-				$serialsLower = array_map(function ($row) {
-					return $row['asset_serial_number_normalized'];
-				}, $rowsWithResolvedModelIds);
-
-				$existingLower = $assetInfoObj->getExistingAssetInfoBySerials($serialsLower, $module, $username);
-				$existingSet = array_fill_keys($existingLower, true);
+				$uniqueModelIds = array_values(array_unique(array_map(function ($row) {
+					return (int)$row['asset_model_id'];
+				}, $rowsWithResolvedModelIds)));
+				$assetHierarchyByModelId = $assetInfoObj->getAssetHierarchyByModelIds($uniqueModelIds, $module, $username);
 
 				$infoToInsert = [];
 				$skippedDuplicateDb = 0;
+				$compositeRows = [];
+				$skippedInvalidModelMapping = 0;
 				foreach ($rowsWithResolvedModelIds as $row) {
-					if (isset($existingSet[$row['asset_serial_number_normalized']])) {
+					$modelId = (int)$row['asset_model_id'];
+					if (!isset($assetHierarchyByModelId[$modelId])) {
+						$skippedInvalidModelMapping++;
+						$rowErrors[] = [
+							'row' => $row['row'],
+							'value' => $row['asset_serial_number'] . ' (Model: ' . $row['asset_model'] . ')',
+							'reason' => 'Asset Model mapping is invalid',
+						];
+						continue;
+					}
+
+					$hierarchy = $assetHierarchyByModelId[$modelId];
+					$row['asset_family_id'] = $hierarchy['asset_family_id'];
+					$row['asset_category_id'] = $hierarchy['asset_category_id'];
+					$row['asset_type_id'] = $hierarchy['asset_type_id'];
+					$compositeRows[] = $row;
+				}
+
+				$existingCompositeKeys = $assetInfoObj->getExistingAssetInfoByCompositeKeys($compositeRows, $module, $username);
+				$existingCompositeSet = array_fill_keys($existingCompositeKeys, true);
+
+				foreach ($compositeRows as $row) {
+					$compositeKey = strtolower(trim($row['asset_serial_number'])) . '|' . $row['asset_family_id'] . '|' . $row['asset_category_id'] . '|' . $row['asset_type_id'] . '|' . $row['asset_model_id'];
+					if (isset($existingCompositeSet[$compositeKey])) {
 						$skippedDuplicateDb++;
 						$rowErrors[] = [
 							'row' => $row['row'],
@@ -393,6 +415,9 @@ switch ($method) {
 					}
 
 					$infoToInsert[] = [
+						'asset_family_id' => $row['asset_family_id'],
+						'asset_category_id' => $row['asset_category_id'],
+						'asset_type_id' => $row['asset_type_id'],
 						'asset_serial_number' => $row['asset_serial_number'],
 						'asset_purchase_date' => $row['asset_purchase_date'],
 						'asset_price' => $row['asset_price'],
@@ -424,6 +449,7 @@ switch ($method) {
 					"skipped_duplicate_file" => $serialStats['skipped_duplicate_file'],
 					"skipped_invalid_model" => $skippedInvalidModel,
 					"skipped_ambiguous_model" => $skippedAmbiguousModel,
+					"skipped_invalid_model_mapping" => $skippedInvalidModelMapping,
 					"skipped_duplicate_db" => $skippedDuplicateDb,
 					"row_errors" => $rowErrors
 				];
@@ -491,50 +517,53 @@ switch ($method) {
 			break;
 		}
 
-		$serialNumber = trim($input['asset_serial_number']);
-		$purchaseDate = trim($input['asset_purchase_date']);
-		$price = $input['asset_price'];
-		$warrantyExpiry = trim($input['asset_warranty_expiry']);
-		$assetModelId = null;
-		if (isset($input['asset_model_id']) && is_numeric($input['asset_model_id'])) {
-			$assetModelId = (int)$input['asset_model_id'];
-		} elseif (isset($input['asset_model']) && trim($input['asset_model']) !== '') {
-			$assetModelName = trim($input['asset_model']);
-			if (!preg_match($regExp, $assetModelName)) {
-				http_response_code(400);
-				$error = ["error" => "Asset Model can only contain letters, numbers, underscores, hyphens, forward slashes and spaces"];
-				echo json_encode($error);
-				$logger->logRequestAndResponse($input, $error);
-				break;
-			}
-
-			$normalizedModel = strtolower(trim($assetModelName));
-			$modelLookup = $assetModelObj->getAssetModelIdsByNames([$normalizedModel], $module, $username);
-			if (isset($modelLookup['duplicates'][$normalizedModel])) {
-				http_response_code(400);
-				$error = ["error" => "Asset Model name is not unique; provide Asset Model ID"];
-				echo json_encode($error);
-				$logger->logRequestAndResponse($input, $error);
-				break;
-			}
-
-			if (!isset($modelLookup['map'][$normalizedModel])) {
-				http_response_code(400);
-				$error = ["error" => "Asset Model not found"];
-				echo json_encode($error);
-				$logger->logRequestAndResponse($input, $error);
-				break;
-			}
-
-			$assetModelId = $modelLookup['map'][$normalizedModel];
-		} else {
+		// error code for invalid asset model ID
+		if (!isset($input['asset_model_id']) || !is_numeric($input['asset_model_id'])) {
 			http_response_code(400);
-			$error = ["error" => "Asset Model name or ID is required"];
+			$error = ["error" => "Asset Model ID is required and must be a valid number"];
 			echo json_encode($error);
 			$logger->logRequestAndResponse($input, $error);
 			break;
 		}
 
+		// error code for invalid asset family ID
+		if (!isset($input['asset_family_id']) || !is_numeric($input['asset_family_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Family ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// error code for invalid asset category ID
+		if (!isset($input['asset_category_id']) || !is_numeric($input['asset_category_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Category ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// error code for invalid asset type ID
+		if (!isset($input['asset_type_id']) || !is_numeric($input['asset_type_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Type ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		
+		$assetFamilyId = (int)$input['asset_family_id'];
+		$assetCategoryId = (int)$input['asset_category_id'];
+		$assetTypeId = (int)$input['asset_type_id'];
+		$assetModelId = (int)$input['asset_model_id'];
+		$serialNumber = trim($input['asset_serial_number']);
+		$purchaseDate = trim($input['asset_purchase_date']);
+		$price = $input['asset_price'];
+		$warrantyExpiry = trim($input['asset_warranty_expiry']);
+	
+		
 		if (!preg_match($regExp, $serialNumber)) {
 			http_response_code(400);
 			$error = ["error" => "Asset Serial Number can only contain letters, numbers and spaces"];
@@ -567,7 +596,7 @@ switch ($method) {
 			break;
 		}
 
-		$existingInfo = $assetInfoObj->isDuplicateAssetInfo($serialNumber, $module, $username);
+		$existingInfo = $assetInfoObj->isDuplicateAssetInfo($assetFamilyId, $assetCategoryId, $assetTypeId, $assetModelId, $serialNumber, $module, $username);
 		if ($existingInfo) {
 			http_response_code(409);
 			$error = ["error" => "Asset Info already exists"];
@@ -576,10 +605,10 @@ switch ($method) {
 			break;
 		}
 
-		$result = $assetInfoObj->insertAssetInfo($serialNumber, $purchaseDate, $price, $warrantyExpiry, $assetModelId, $username, $module, $username);
+		$result = $assetInfoObj->insertAssetInfo($assetFamilyId, $assetCategoryId, $assetTypeId, $assetModelId, $serialNumber, $purchaseDate, $price, $warrantyExpiry, $warrantyExpiry, $username, $module, $username);
 		if ($result) {
 			http_response_code(201);
-			$response = ["message" => "Asset Info created successfully", "id" => $result];
+			$response = ["message" => "Asset Info created successfully", "asset_family_id" => $assetFamilyId, "asset_category_id" => $assetCategoryId, "asset_type_id" => $assetTypeId, "asset_model_id" => $assetModelId, "asset_serial_number" => $serialNumber];
 			echo json_encode($response);
 			$logger->logRequestAndResponse($input, $response);
 		} else {
@@ -593,14 +622,6 @@ switch ($method) {
 
 	case 'PUT':
 		$logger->log("PUT request received");
-		if (!isset($_GET['id'])) {
-			http_response_code(400);
-			$error = ["error" => "Asset Info ID is required"];
-			echo json_encode($error);
-			$logger->logRequestAndResponse(array_merge($_GET, $input), $error);
-			break;
-		}
-
 		if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 			http_response_code(400);
 			$error = ["error" => "Asset Info ID must be a valid number"];
@@ -609,6 +630,8 @@ switch ($method) {
 			break;
 		}
 
+		$id = (int)$_GET['id'];
+		
 		if (!isset($input['asset_serial_number']) || empty(trim($input['asset_serial_number']))) {
 			http_response_code(400);
 			$error = ["error" => "Asset Serial Number is required"];
@@ -642,7 +665,72 @@ switch ($method) {
 		}
 
 
-		if (!preg_match($regExp, trim($input['asset_serial_number']))) {
+		// only accept only if asset price is > 0
+		if ($input['asset_price'] <= 0) {
+			http_response_code(400);
+			$error = ["error" => "Asset Price must be greater than zero"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// only accept if warranty expiry date is greater than or equal to purchase date
+		if (strtotime($input['asset_warranty_expiry']) < strtotime($input['asset_purchase_date'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Warranty Expiry must be greater than or equal to Asset Purchase Date"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// error code for invalid asset model ID
+		if (!isset($input['asset_model_id']) || !is_numeric($input['asset_model_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Model ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// error code for invalid asset family ID
+		if (!isset($input['asset_family_id']) || !is_numeric($input['asset_family_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Family ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// error code for invalid asset category ID
+		if (!isset($input['asset_category_id']) || !is_numeric($input['asset_category_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Category ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		// error code for invalid asset type ID
+		if (!isset($input['asset_type_id']) || !is_numeric($input['asset_type_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Type ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
+		
+		$assetFamilyId = (int)$input['asset_family_id'];
+		$assetCategoryId = (int)$input['asset_category_id'];
+		$assetTypeId = (int)$input['asset_type_id'];
+		$assetModelId = (int)$input['asset_model_id'];
+		$serialNumber = trim($input['asset_serial_number']);
+		$purchaseDate = trim($input['asset_purchase_date']);
+		$price = $input['asset_price'];
+		$warrantyExpiry = trim($input['asset_warranty_expiry']);
+	
+		
+		if (!preg_match($regExp, $serialNumber)) {
 			http_response_code(400);
 			$error = ["error" => "Asset Serial Number can only contain letters, numbers and spaces"];
 			echo json_encode($error);
@@ -650,7 +738,7 @@ switch ($method) {
 			break;
 		}
 
-		if (!preg_match($dateRegExp, trim($input['asset_purchase_date']))) {
+		if (!preg_match($dateRegExp, $purchaseDate)) {
 			http_response_code(400);
 			$error = ["error" => "Asset Purchase Date must be in YYYY-MM-DD format"];
 			echo json_encode($error);
@@ -658,7 +746,7 @@ switch ($method) {
 			break;
 		}
 
-		if (!preg_match($dateRegExp, trim($input['asset_warranty_expiry']))) {
+		if (!preg_match($dateRegExp, $warrantyExpiry)) {
 			http_response_code(400);
 			$error = ["error" => "Asset Warranty Expiry must be in YYYY-MM-DD format"];
 			echo json_encode($error);
@@ -666,83 +754,36 @@ switch ($method) {
 			break;
 		}
 
-		if (!preg_match($priceRegExp, (string)$input['asset_price'])) {
+		if (!preg_match($priceRegExp, (string)$price)) {
 			http_response_code(400);
 			$error = ["error" => "Asset Price must be a valid number"];
 			echo json_encode($error);
 			$logger->logRequestAndResponse($input, $error);
 			break;
 		}
-
-		$id = intval($_GET['id']);
-		$serialNumber = trim($input['asset_serial_number']);
-		$purchaseDate = trim($input['asset_purchase_date']);
-		$price = $input['asset_price'];
-		$warrantyExpiry = trim($input['asset_warranty_expiry']);
-		$assetModelId = null;
-		if (isset($input['asset_model_id']) && is_numeric($input['asset_model_id'])) {
-			$assetModelId = (int)$input['asset_model_id'];
-		} elseif (isset($input['asset_model']) && trim($input['asset_model']) !== '') {
-			$assetModelName = trim($input['asset_model']);
-			if (!preg_match($regExp, $assetModelName)) {
-				http_response_code(400);
-				$error = ["error" => "Asset Model can only contain letters, numbers, underscores, hyphens, forward slashes and spaces"];
-				echo json_encode($error);
-				$logger->logRequestAndResponse($input, $error);
-				break;
-			}
-
-			$normalizedModel = strtolower(trim($assetModelName));
-			$modelLookup = $assetModelObj->getAssetModelIdsByNames([$normalizedModel], $module, $username);
-			if (isset($modelLookup['duplicates'][$normalizedModel])) {
-				http_response_code(400);
-				$error = ["error" => "Asset Model name is not unique; provide Asset Model ID"];
-				echo json_encode($error);
-				$logger->logRequestAndResponse($input, $error);
-				break;
-			}
-
-			if (!isset($modelLookup['map'][$normalizedModel])) {
-				http_response_code(400);
-				$error = ["error" => "Asset Model not found"];
-				echo json_encode($error);
-				$logger->logRequestAndResponse($input, $error);
-				break;
-			}
-
-			$assetModelId = $modelLookup['map'][$normalizedModel];
-		} else {
-			http_response_code(400);
-			$error = ["error" => "Asset Model name or ID is required"];
-			echo json_encode($error);
-			$logger->logRequestAndResponse($input, $error);
-			break;
-		}
-
-		$existingInfo = $assetInfoObj->isDuplicateAssetInfoForUpdate($id, $serialNumber, $module, $username);
+		
+		$existingInfo = $assetInfoObj->isDuplicateAssetInfoForUpdate($id, $assetFamilyId, $assetCategoryId, $assetTypeId, $assetModelId, $serialNumber, $module, $username);
 		if ($existingInfo) {
 			http_response_code(409);
-			$error = ["error" => "Asset Info already exists"];
+			$error = ["error" => "Another Asset Info with the same details already exists"];
 			echo json_encode($error);
 			$logger->logRequestAndResponse($input, $error);
 			break;
 		}
-
-		$result = $assetInfoObj->updateAssetInfo($id, $serialNumber, $purchaseDate, $price, $warrantyExpiry, $assetModelId, $username, $module, $username);
+		$result = $assetInfoObj->updateAssetInfo($id, $assetFamilyId, $assetCategoryId, $assetTypeId, $assetModelId, $serialNumber, $purchaseDate, $price, $warrantyExpiry, $username, $module, $username);
 		if ($result) {
 			http_response_code(200);
 			$response = ["message" => "Asset Info updated successfully"];
 			echo json_encode($response);
-			$logger->logRequestAndResponse(array_merge($_GET, $input), $response);
+			$logger->logRequestAndResponse($input, $response);
 		} else {
 			http_response_code(500);
 			$error = ["error" => "Failed to update Asset Info"];
 			echo json_encode($error);
-			$logger->logRequestAndResponse(array_merge($_GET, $input), $error);
+			$logger->logRequestAndResponse($input, $error);
 		}
-
 		break;
-
+		
 	case 'DELETE':
 		$logger->log("DELETE request received");
 		if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
@@ -753,8 +794,7 @@ switch ($method) {
 			break;
 		}
 
-		$id = intval($_GET['id']);
-
+		$id = (int)$_GET['id'];
 		$result = $assetInfoObj->deleteAssetInfo($id, $module, $username);
 
 		if ($result) {

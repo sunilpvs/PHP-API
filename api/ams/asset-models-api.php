@@ -61,6 +61,16 @@ switch ($method) {
 			break;
 		}
 
+		if (isset($_GET['type']) && $_GET['type'] === 'filter' && isset($_GET['brand_id']) && isset($_GET['type_id'])) {
+			$typeId = intval($_GET['type_id']);
+			$brandId = intval($_GET['brand_id']);
+			$data = $assetModelObj->getAssetModelsByTypeAndBrand($typeId, $brandId, $module, $username);
+			http_response_code(200);
+			echo json_encode($data);
+			$logger->logRequestAndResponse($_GET, $data);
+			break;
+		}
+
 		$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 		$limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
 		$offset = ($page - 1) * $limit;
@@ -127,6 +137,7 @@ switch ($method) {
 				$modelColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-model');
 				$configColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'config');
 				$categoryColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-category');
+				$typeColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-type');
 				$brandColumn = ExcelImportHelper::findHeaderColumn($headerRow, 'asset-brand');
 
 				if ($modelColumn === null) {
@@ -148,6 +159,14 @@ switch ($method) {
 				if ($categoryColumn === null) {
 					http_response_code(400);
 					$error = ["error" => "Asset Category column not found in header"];
+					echo json_encode($error);
+					$logger->logRequestAndResponse(["file" => $fileName], $error);
+					break;
+				}
+
+				if ($typeColumn === null) {
+					http_response_code(400);
+					$error = ["error" => "Asset Type column not found in header"];
 					echo json_encode($error);
 					$logger->logRequestAndResponse(["file" => $fileName], $error);
 					break;
@@ -218,6 +237,21 @@ switch ($method) {
 					}
 				}
 
+				$typeAnalysis = ExcelImportHelper::analyzeColumnValues($rows, $typeColumn, [
+					'regex' => $lookupRegExp,
+					'null_values' => ['', 'null'],
+					'null_reason' => 'Asset Type is empty',
+					'invalid_reason' => 'Asset Type can only contain letters, numbers, spaces, underscores, hyphens, and slashes',
+					'duplicate_file_reason' => '',
+				]);
+
+				$validTypeRows = $typeAnalysis['valid_rows'];
+				foreach ($typeAnalysis['errors'] as $row => $errors) {
+					foreach ($errors as $error) {
+						$rowErrors[$row][] = $error;
+					}
+				}
+
 				// Sort and format errors for response
 
 				$modelRowMap = [];
@@ -240,9 +274,14 @@ switch ($method) {
 					$brandRowMap[$row['row']] = $row;
 				}
 
+				$typeRowMap = [];
+				foreach ($validTypeRows as $row) {
+					$typeRowMap[$row['row']] = $row;
+				}
+
 				$combinedValidRows = [];
 				foreach ($modelRowMap as $rowIndex => $modelRow) {
-					if (isset($configRowMap[$rowIndex]) && isset($categoryRowMap[$rowIndex]) && isset($brandRowMap[$rowIndex])) {
+					if (isset($configRowMap[$rowIndex]) && isset($categoryRowMap[$rowIndex]) && isset($brandRowMap[$rowIndex]) && isset($typeRowMap[$rowIndex])) {
 						$combinedValidRows[] = [
 							'row' => $rowIndex,
 							'asset_model' => $modelRow['value'],
@@ -252,6 +291,8 @@ switch ($method) {
 							'asset_category_normalized' => $categoryRowMap[$rowIndex]['normalized'],
 							'asset_brand' => $brandRowMap[$rowIndex]['value'],
 							'asset_brand_normalized' => $brandRowMap[$rowIndex]['normalized'],
+							'asset_type' => $typeRowMap[$rowIndex]['value'],
+							'asset_type_normalized' => $typeRowMap[$rowIndex]['normalized'],
 						];
 					}
 				}
@@ -264,11 +305,17 @@ switch ($method) {
 					return $row['asset_brand_normalized'];
 				}, $combinedValidRows)));
 
+				$uniqueTypeNames = array_values(array_unique(array_map(function ($row) {
+					return $row['asset_type_normalized'];
+				}, $combinedValidRows)));
+
 				$categoryIdMap = $assetCategoryObj->getAssetCategoryIdsByNames($uniqueCategoryNames, $module, $username);
 				$brandIdMap = $assetBrandObj->getBrandIdsByNames($uniqueBrandNames, $module, $username);
+				$typeIdMap = $assetTypeObj->getAssetTypeIdsByNames($uniqueTypeNames, $module, $username);
 
 				$skippedInvalidCategory = 0;
 				$skippedInvalidBrand = 0;
+				$skippedInvalidType = 0;
 				$rowsWithResolvedIds = [];
 				foreach ($combinedValidRows as $row) {
 					if (!isset($categoryIdMap[$row['asset_category_normalized']])) {
@@ -291,6 +338,16 @@ switch ($method) {
 						continue;
 					}
 
+					if (!isset($typeIdMap[$row['asset_type_normalized']])) {
+						$skippedInvalidType++;
+						$rowErrors[$row['row']][] = [
+							'row' => $row['row'],
+							'value' => $row['asset_model'] . ' (Type: ' . $row['asset_type'] . ')',
+							'reason' => 'Asset Type does not exist',
+						];
+						continue;
+					}
+
 					$rowsWithResolvedIds[] = [
 						'row' => $row['row'],
 						'asset_model' => $row['asset_model'],
@@ -298,8 +355,10 @@ switch ($method) {
 						'config' => $row['config'],
 						'asset_category_id' => $categoryIdMap[$row['asset_category_normalized']],
 						'brand_id' => $brandIdMap[$row['asset_brand_normalized']],
+						'asset_type_id' => $typeIdMap[$row['asset_type_normalized']],
 						'asset_category' => $row['asset_category'],
 						'asset_brand' => $row['asset_brand'],
+						'asset_type' => $row['asset_type'],
 					];
 				}
 
@@ -308,13 +367,13 @@ switch ($method) {
 				$skippedDuplicateFile = 0;
 				$validRowsNoDuplicates = [];
 				foreach ($rowsWithResolvedIds as $row) {
-					$compositeKey = strtolower(trim($row['asset_model'])) . '|' . $row['asset_category_id'] . '|' . $row['brand_id'];
+					$compositeKey = strtolower(trim($row['asset_model'])) . '|' . $row['asset_category_id'] . '|' . $row['brand_id'] . '|' . $row['asset_type_id'];
 					if (isset($seenCompositeKeys[$compositeKey])) {
 						$skippedDuplicateFile++;
 						$rowErrors[$row['row']][] = [
 							'row' => $row['row'],
-							'value' => $row['asset_model'] . ' (Category: ' . $row['asset_category'] . ', Brand: ' . $row['asset_brand'] . ')',
-							'reason' => 'Duplicate asset model with same category and brand in file',
+							'value' => $row['asset_model'] . ' (Category: ' . $row['asset_category'] . ', Brand: ' . $row['asset_brand'] . ', Type: ' . $row['asset_type'] . ')',
+							'reason' => 'Duplicate asset model with same category, brand and type in file',
 						];
 						continue;
 					}
@@ -328,6 +387,7 @@ switch ($method) {
 						'asset_model' => $row['asset_model'],
 						'asset_category_id' => $row['asset_category_id'],
 						'brand_id' => $row['brand_id'],
+						'asset_type_id' => $row['asset_type_id'],
 					];
 				}, $validRowsNoDuplicates);
 
@@ -338,6 +398,7 @@ switch ($method) {
 					$isDuplicate = $assetModelObj->isDuplicateAssetModel(
 						$row['asset_model'],
 						$row['asset_category_id'],
+						$row['asset_type_id'],
 						$row['brand_id'],
 						$module,
 						$username
@@ -347,8 +408,8 @@ switch ($method) {
 						$skippedDuplicateDb++;
 						$rowErrors[$row['row']][] = [
 							'row' => $row['row'],
-							'value' => $row['asset_model'] . ' (Category: ' . $row['asset_category'] . ', Brand: ' . $row['asset_brand'] . ')',
-							'reason' => 'Asset Model with same category and brand already exists in DB',
+							'value' => $row['asset_model'] . ' (Category: ' . $row['asset_category'] . ', Brand: ' . $row['asset_brand'] . ', Type: ' . $row['asset_type'] . ')',
+							'reason' => 'Asset Model with same category, brand and type already exists in DB',
 						];
 						continue;
 					}
@@ -358,6 +419,7 @@ switch ($method) {
 						'config' => $row['config'],
 						'asset_category_id' => $row['asset_category_id'],
 						'brand_id' => $row['brand_id'],
+						'asset_type_id' => $row['asset_type_id'],
 					];
 				}
 
@@ -380,8 +442,8 @@ switch ($method) {
 					"message" => "Excel import completed",
 					"total_rows" => $modelStats['total_rows'],
 					"inserted" => count($modelsToInsert),
-					"skipped_null" => $modelStats['skipped_null'] + $configAnalysis['stats']['skipped_null'] + $categoryAnalysis['stats']['skipped_null'] + $brandAnalysis['stats']['skipped_null'],
-					"skipped_invalid" => $modelStats['skipped_invalid'] + $configAnalysis['stats']['skipped_invalid'] + $categoryAnalysis['stats']['skipped_invalid'] + $brandAnalysis['stats']['skipped_invalid'],
+					"skipped_null" => $modelStats['skipped_null'] + $configAnalysis['stats']['skipped_null'] + $categoryAnalysis['stats']['skipped_null'] + $brandAnalysis['stats']['skipped_null'] + $typeAnalysis['stats']['skipped_null'],
+					"skipped_invalid" => $modelStats['skipped_invalid'] + $configAnalysis['stats']['skipped_invalid'] + $categoryAnalysis['stats']['skipped_invalid'] + $brandAnalysis['stats']['skipped_invalid'] + $typeAnalysis['stats']['skipped_invalid'],
 					"skipped_duplicate_file" => $skippedDuplicateFile,
 					"skipped_invalid_category" => $skippedInvalidCategory,
 					"skipped_invalid_brand" => $skippedInvalidBrand,
@@ -425,6 +487,14 @@ switch ($method) {
 			break;
 		}
 
+		if (!isset($input['asset_type_id']) || !is_numeric($input['asset_type_id'])) {
+			http_response_code(400);
+			$error = ["error" => "Asset Type ID is required and must be a valid number"];
+			echo json_encode($error);
+			$logger->logRequestAndResponse($input, $error);
+			break;
+		}
+
 		if (!isset($input['brand_id']) || !is_numeric($input['brand_id'])) {
 			http_response_code(400);
 			$error = ["error" => "Brand ID is required and must be a valid number"];
@@ -437,6 +507,7 @@ switch ($method) {
 		$configValue = trim($input['config']);
 		$assetCategoryId = intval($input['asset_category_id']);
 		$brandId = intval($input['brand_id']);
+		$assetTypeId = intval($input['asset_type_id']);
 
 		if (!preg_match($regExp, $assetModel)) {
 			http_response_code(400);
@@ -454,16 +525,16 @@ switch ($method) {
 			break;
 		}
 
-		$existingModel = $assetModelObj->isDuplicateAssetModel($assetModel, $assetCategoryId, $brandId, $module, $username);
+		$existingModel = $assetModelObj->isDuplicateAssetModel($assetModel, $assetCategoryId, $brandId, $assetTypeId, $module, $username);
 		if ($existingModel) {
 			http_response_code(409);
-			$error = ["error" => "Asset Model with this category and brand already exists"];
+			$error = ["error" => "Asset Model with this category, brand and type already exists"];
 			echo json_encode($error);
 			$logger->logRequestAndResponse($input, $error);
 			break;
 		}
 
-		$result = $assetModelObj->insertAssetModel($assetModel, $configValue, $assetCategoryId, $brandId, $username, $module, $username);
+		$result = $assetModelObj->insertAssetModel($assetModel, $configValue, $assetCategoryId, $brandId, $assetTypeId, $username, $module, $username);
 		if ($result) {
 			http_response_code(201);
 			$response = ["message" => "Asset Model created successfully", "id" => $result];
@@ -549,17 +620,18 @@ switch ($method) {
 		$configValue = trim($input['config']);
 		$assetCategoryId = intval($input['asset_category_id']);
 		$brandId = intval($input['brand_id']);
+		$assetTypeId = intval($input['asset_type_id']);
 
-		$existingModel = $assetModelObj->isDuplicateAssetModelForUpdate($id, $assetModel, $assetCategoryId, $brandId, $module, $username);
+		$existingModel = $assetModelObj->isDuplicateAssetModelForUpdate($id, $assetModel, $assetCategoryId, $assetTypeId, $brandId, $module, $username);
 		if ($existingModel) {
 			http_response_code(409);
-			$error = ["error" => "Asset Model with this category and brand already exists"];
+			$error = ["error" => "Asset Model with this category, brand and type already exists"];
 			echo json_encode($error);
 			$logger->logRequestAndResponse($input, $error);
 			break;
 		}
 
-		$result = $assetModelObj->updateAssetModel($id, $assetModel, $configValue, $assetCategoryId, $brandId, $username, $module, $username);
+		$result = $assetModelObj->updateAssetModel($id, $assetModel, $configValue, $assetCategoryId,  $assetTypeId, $brandId, $username, $module, $username);
 		if ($result) {
 			http_response_code(200);
 			$response = ["message" => "Asset Model updated successfully"];

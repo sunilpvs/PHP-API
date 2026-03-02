@@ -6,17 +6,19 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
 -- Table structure for table `ams_asset_models`
 CREATE TABLE ams_asset_models (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    asset_category_id INT NOT NULL,
+    asset_type_id INT NOT NULL,
+	brand_id INT NOT NULL,
     asset_model VARCHAR(25) NOT NULL,
     config TEXT NOT NULL,
-    asset_category_id INT NOT NULL,
-    brand_id INT NOT NULL,
     created_by INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_updated_by INT DEFAULT NULL,
     last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_asset_model (asset_model, asset_category_id, brand_id),
-    FOREIGN KEY (asset_category_id) REFERENCES ams_asset_category(id),
-    FOREIGN KEY (brand_id) REFERENCES ams_asset_brands(id)
+    UNIQUE KEY uq_asset_model (asset_model, asset_category_id, asset_type_id, brand_id),
+    FOREIGN KEY (asset_category_id) REFERENCES ams_asset_category(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (asset_type_id) REFERENCES ams_asset_type(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (brand_id) REFERENCES ams_asset_brands(id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 */
 
@@ -73,6 +75,19 @@ class AssetModels
         }
     }
 
+    // get asset models by asset type id and brand id
+    public function getAssetModelsByTypeAndBrand($assetTypeId, $brandId, $module, $username)
+    {
+        try {
+            $query = 'SELECT id, asset_model FROM ams_asset_models WHERE asset_type_id = ? AND brand_id = ?';
+            $this->logger->logQuery($query, [$assetTypeId, $brandId], 'classes', $module, $username);
+            return $this->conn->runQuery($query, [$assetTypeId, $brandId]);
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching asset models by type and brand: ' . $e->getMessage(), 'classes', $module, $username);
+            return false;
+        }
+    }
+
     // get asset model count
     public function getAssetModelCount($module, $username)
     {
@@ -93,7 +108,7 @@ class AssetModels
         try {
             $limit = (int)$limit;
             $offset = (int)$offset;
-            $query = "SELECT id, asset_model, config, asset_category_id, brand_id FROM ams_asset_models LIMIT $limit OFFSET $offset";
+            $query = "SELECT id, asset_model, config, asset_category_id, asset_type_id, brand_id FROM ams_asset_models LIMIT $limit OFFSET $offset";
             $this->logger->logQuery($query, [$limit, $offset], 'classes', $module, $username);
             return $this->conn->runQuery($query, []);
         } catch (Exception $e) {
@@ -103,12 +118,12 @@ class AssetModels
     }
 
     // insert asset model
-    public function insertAssetModel($assetModel, $config, $assetCategoryId, $brandId, $createdBy, $module, $username)
+    public function insertAssetModel($assetModel, $config, $assetCategoryId, $assetTypeId, $brandId, $createdBy, $module, $username)
     {
         try {
-            $query = 'INSERT INTO ams_asset_models (asset_model, config, asset_category_id, brand_id, created_by) VALUES (?, ?, ?, ?, ?)';
-            $params = [$assetModel, $config, $assetCategoryId, $brandId, $createdBy];
-            $this->logger->logQuery($query, [], 'classes', $module, $username);
+            $query = 'INSERT INTO ams_asset_models (asset_model, config, asset_category_id, asset_type_id, brand_id, created_by) VALUES (?, ?, ?, ?, ?, ?)';
+            $params = [$assetModel, $config, $assetCategoryId, $assetTypeId, $brandId, $createdBy];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset model '$assetModel' inserted by user ID $createdBy";
             return $this->conn->insert($query, $params, $logMessage);
         } catch (Exception $e) {
@@ -117,7 +132,7 @@ class AssetModels
         }
     }
 
-    // insert batch asset models from excel (each row has asset_model, config, asset_category_id, brand_id)
+    // insert batch asset models from excel (each row has asset_model, config, asset_category_id, asset_type_id, brand_id)
     public function insertBatchAssetModelsFromExcel($modelsData, $createdBy)
     {
         if (empty($modelsData) || !is_array($modelsData)) {
@@ -126,10 +141,10 @@ class AssetModels
         }
 
         try {
-            $query = 'INSERT INTO ams_asset_models (asset_model, config, asset_category_id, brand_id, created_by) VALUES (?, ?, ?, ?, ?)';
+            $query = 'INSERT INTO ams_asset_models (asset_model, config, asset_category_id, asset_type_id, brand_id, created_by) VALUES (?, ?, ?, ?, ?, ?)';
             $params = [];
             foreach ($modelsData as $row) {
-                $params[] = [$row['asset_model'], $row['config'], $row['asset_category_id'], $row['brand_id'], $createdBy];
+                $params[] = [$row['asset_model'], $row['config'], $row['asset_category_id'], $row['asset_type_id'], $row['brand_id'], $createdBy];
             }
             $this->logger->logQuery($query, $params, 'classes', 'Excel Import', 'System');
             return $this->conn->insertBatch($query, $params);
@@ -203,7 +218,7 @@ class AssetModels
         }
     }
 
-    // check existing models by composite key (asset_model + category_id + brand_id), returns array of "model|category|brand" strings
+    // check existing models by composite key (asset_model +  category_id + brand_id + asset_type_id), returns array of "model|category|brand|asset_type" strings
     public function getExistingAssetModelsByCompositeKeys(array $modelData, $module, $username)
     {
         if (empty($modelData)) {
@@ -214,19 +229,23 @@ class AssetModels
             $conditions = [];
             $params = [];
             foreach ($modelData as $data) {
-                $conditions[] = '(LOWER(TRIM(asset_model)) = ? AND asset_category_id = ? AND brand_id = ?)';
+                $conditions[] = '(LOWER(TRIM(asset_model)) = ? 
+                                    AND asset_category_id = ? 
+                                    AND brand_id = ? 
+                                    AND asset_type_id = ?)';
                 $params[] = strtolower(trim($data['asset_model']));
                 $params[] = $data['asset_category_id'];
                 $params[] = $data['brand_id'];
+                $params[] = $data['asset_type_id'];
             }
             $conditionsStr = implode(' OR ', $conditions);
-            $query = "SELECT LOWER(TRIM(asset_model)) AS asset_model, asset_category_id, brand_id FROM ams_asset_models WHERE $conditionsStr";
+            $query = "SELECT LOWER(TRIM(asset_model)) AS asset_model, asset_category_id, brand_id, asset_type_id FROM ams_asset_models WHERE $conditionsStr";
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $rows = $this->conn->runQuery($query, $params);
             
             $result = [];
             foreach ($rows as $row) {
-                $key = strtolower(trim($row['asset_model'])) . '|' . $row['asset_category_id'] . '|' . $row['brand_id'];
+                $key = strtolower(trim($row['asset_model'])) . '|' . $row['asset_category_id'] . '|' . $row['brand_id'] . '|' . $row['asset_type_id'];
                 $result[] = $key;
             }
             return $result;
@@ -237,11 +256,11 @@ class AssetModels
     }
 
     // update asset model
-    public function updateAssetModel($id, $assetModel, $config, $assetCategoryId, $brandId, $lastUpdatedBy, $module, $username)
+    public function updateAssetModel($id, $assetModel, $config, $assetCategoryId, $assetTypeId, $brandId, $lastUpdatedBy, $module, $username)
     {
         try {
-            $query = 'UPDATE ams_asset_models SET asset_model = ?, config = ?, asset_category_id = ?, brand_id = ?, last_updated_by = ? WHERE id = ?';
-            $params = [$assetModel, $config, $assetCategoryId, $brandId, $lastUpdatedBy, $id];
+            $query = 'UPDATE ams_asset_models SET asset_model = ?, config = ?, asset_category_id = ?, asset_type_id = ?, brand_id = ?, last_updated_by = ? WHERE id = ?';
+            $params = [$assetModel, $config, $assetCategoryId, $assetTypeId, $brandId, $lastUpdatedBy, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $logMessage = "Asset model ID $id updated to '$assetModel' by user ID $lastUpdatedBy";
             $rows = $this->conn->update($query, $params, $logMessage);
@@ -271,12 +290,12 @@ class AssetModels
 
     // helper methods
 
-    // check duplicate asset model for insert (composite key: asset_model + category_id + brand_id)
-    public function isDuplicateAssetModel($assetModel, $assetCategoryId, $brandId, $module, $username)
+    // check duplicate asset model for insert (composite key: asset_model + category_id + brand_id + asset_type_id)
+    public function isDuplicateAssetModel($assetModel, $assetCategoryId, $assetTypeId, $brandId, $module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_models WHERE LOWER(TRIM(asset_model)) = LOWER(TRIM(?)) AND asset_category_id = ? AND brand_id = ?';
-            $params = [trim($assetModel), $assetCategoryId, $brandId];
+            $query = 'SELECT COUNT(*) AS total FROM ams_asset_models WHERE LOWER(TRIM(asset_model)) = LOWER(TRIM(?)) AND asset_category_id = ? AND asset_type_id = ? AND brand_id = ?';
+            $params = [trim($assetModel), $assetCategoryId, $assetTypeId, $brandId];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $result = $this->conn->runQuery($query, $params);
             return isset($result[0]['total']) && (int)$result[0]['total'] > 0;
@@ -286,12 +305,12 @@ class AssetModels
         }
     }
 
-    // check duplicate asset model for update (composite key: asset_model + category_id + brand_id)
-    public function isDuplicateAssetModelForUpdate($id, $assetModel, $assetCategoryId, $brandId, $module, $username)
+    // check duplicate asset model for update (composite key: asset_model + category_id + brand_id + asset_type_id, excluding current record)
+    public function isDuplicateAssetModelForUpdate($id, $assetModel, $assetCategoryId, $assetTypeId, $brandId, $module, $username)
     {
         try {
-            $query = 'SELECT COUNT(*) AS total FROM ams_asset_models WHERE LOWER(TRIM(asset_model)) = LOWER(TRIM(?)) AND asset_category_id = ? AND brand_id = ? AND id != ?';
-            $params = [trim($assetModel), $assetCategoryId, $brandId, $id];
+            $query = 'SELECT COUNT(*) AS total FROM ams_asset_models WHERE LOWER(TRIM(asset_model)) = LOWER(TRIM(?)) AND asset_category_id = ? AND asset_type_id = ? AND brand_id = ? AND id != ?';
+            $params = [trim($assetModel), $assetCategoryId, $assetTypeId, $brandId, $id];
             $this->logger->logQuery($query, $params, 'classes', $module, $username);
             $result = $this->conn->runQuery($query, $params);
             return isset($result[0]['total']) && (int)$result[0]['total'] > 0;
