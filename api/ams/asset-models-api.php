@@ -71,6 +71,17 @@ switch ($method) {
 			break;
 		}
 
+		// get brand_id, brand_name from model_id
+		// type=brand indicates that the request is to get brand information based on model_id
+		if (isset($_GET['model_id']) && isset($_GET['type']) && $_GET['type'] === 'brand') {
+			$modelId = intval($_GET['model_id']);
+			$data = $assetModelObj->getAssetBrandInfoByModelId($modelId, $module, $username);
+			http_response_code(200);
+			echo json_encode($data);
+			$logger->logRequestAndResponse($_GET, $data);
+			break;
+		}
+
 		$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 		$limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
 		$offset = ($page - 1) * $limit;

@@ -71,6 +71,22 @@ switch ($method) {
             break;
         }
 
+        // get family id by asset category id
+        if (isset($_GET['category_id']) && isset($_GET['type']) && $_GET['type'] === 'family_id') {
+            $categoryId = intval($_GET['category_id']);
+            $data = $assetCategoryObj->getFamilyIdByAssetCategoryId($categoryId, $module, $username);
+            if ($data) {
+                http_response_code(200);
+                echo json_encode(["family_id" => $data]);
+            } else {
+                http_response_code(404);
+                $response = ["error" => "Asset Category not found"];
+                echo json_encode($response);
+                $logger->logRequestAndResponse($_GET, $response);
+            }
+            break;
+        }
+
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
         $offset = ($page - 1) * $limit;

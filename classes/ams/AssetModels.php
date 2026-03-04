@@ -88,6 +88,20 @@ class AssetModels
         }
     }
 
+    // get asset brand id, brand name by asset model id
+    public function getAssetBrandInfoByModelId($id, $module, $username)
+    {
+        try {
+            $query = 'SELECT am.brand_id as brand_id, ab.brand as asset_brand FROM ams_asset_models am JOIN ams_asset_brands ab ON am.brand_id = ab.id WHERE am.id = ?';
+            $this->logger->logQuery($query, [$id], 'classes', $module, $username);
+            $result = $this->conn->runSingle($query, [$id]);
+            return $result ? ['brand_id' => $result['brand_id'], 'asset_brand' => $result['asset_brand']] : null;
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching asset brand info by model id: ' . $e->getMessage(), 'classes', $module, $username);
+            return null;
+        }
+    }
+
     // get asset model count
     public function getAssetModelCount($module, $username)
     {

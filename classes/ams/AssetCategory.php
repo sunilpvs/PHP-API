@@ -86,6 +86,21 @@ class AssetCategory
         }
     }
 
+    // get family id by asset category id
+    public function getFamilyIdByAssetCategoryId($categoryId, $module, $username)
+    {
+        try {
+            $query = 'SELECT asset_family_id as family_id FROM ams_asset_category WHERE id = ?';
+            $params = [$categoryId];
+            $this->logger->logQuery($query, $params, 'classes', $module, $username);
+            $result = $this->conn->runSingle($query, $params);
+            return $result ? $result['family_id'] : null;
+        } catch (Exception $e) {
+            $this->logger->log('Error fetching family id by asset category id: ' . $e->getMessage(), 'classes', $module, $username);
+            return false;
+        }
+    }
+
     // get asset category count
     public function getAssetCategoryCount($module, $username)
     {
