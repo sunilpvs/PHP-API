@@ -58,6 +58,19 @@ switch ($method) {
             http_response_code(200);
             echo json_encode($result);
             break;
+        }
+        
+        if ($type === 'all-roles') {
+            $result = $userObj->getAllUserRolesByEmail($email, $module, $username);
+            if ($result === null) {
+                http_response_code(404);
+                echo json_encode(['error' => 'User roles not found for the provided email']);
+                exit;
+            }
+
+            http_response_code(200);
+            echo json_encode($result);
+            break;
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Invalid type parameter']);

@@ -30,6 +30,15 @@ class UserRole
         return $result ?? null;
     }
 
+    public function getAllUserRolesByEmail($email, $module, $username){
+        $query = "SELECT DISTINCT(user_role_id) AS role_id FROM tbl_user_modules 
+                    WHERE email = ?";
+        $params = [$email];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        $result = $this->conn->runQuery($query, $params);
+        return $result ?? null;
+    }
+
     // under development
     public function getVmsManagementUsers($module, $username){
         $query = "SELECT email, user_role_id AS role_id FROM tbl_user_modules 

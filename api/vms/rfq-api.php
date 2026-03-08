@@ -20,6 +20,7 @@ $logger = new Logger($debugMode, $logDir);
 $rfqOb = new Rfq();
 $auth = new UserLogin();
 $username = $auth->getUserIdFromJWT() ?: 'guest';
+$isAllowedForVendorDump = $auth->isAllowedForVendorDump($username);
 $module = 'RFQ';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -119,6 +120,26 @@ switch ($method) {
             $logger->logRequestAndResponse($_GET, $response);
             break;
         }
+
+        // list of initiated vendors - for dump admin dashboard
+        if (isset($_GET['type']) && $_GET['type'] == 'initiated-rfqs-list' && isset($_GET['mode']) && $_GET['mode'] == 'admin') {
+            //  only user role with [] can access this endpoint - to be implemented in authentication middleware
+            if (!$isAllowedForVendorDump) {
+                http_response_code(403);
+                $error = ["error" => "Access denied: insufficient permissions"];
+                echo json_encode($error);
+                $logger->logRequestAndResponse($_GET, $error);
+                break;
+            }
+            $initiatedRfqs = $rfqOb->getInitiatedRfqsForDump($module, $username);
+            http_response_code(200);
+            $response = ['initiated_rfqs' => $initiatedRfqs];
+            echo json_encode($response);
+            $logger->logRequestAndResponse($_GET, $response);
+            break;
+        }
+
+       
 
 
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;

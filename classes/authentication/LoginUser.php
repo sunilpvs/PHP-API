@@ -24,10 +24,20 @@ class UserLogin
 
     function validateUserLogin($username, $password, $entity_id)
     {
-        $sql = "SELECT a.id, a.user_name, a.password, a.code, a.status, b.f_name , b.l_name, a.email, b.mobile, c.Name as ctype, d.user_role, a.entity_id ";
-        $sql .= "FROM tbl_users a, tbl_contact b, tbl_contacttype c, tbl_user_role d ";
-        $sql .= " WHERE a.contact_Id = b.Id AND b.contacttype_Id = c.id AND a.user_status = 1";
-        $sql .= " AND (a.user_name = ? OR a.email = ?) AND a.entity_id = ? LIMIT 1";
+        // add d.id = 8 to the where clause to restrict login to only VMS_VENDOR role
+        $sql = "SELECT a.id, a.user_name, a.password, a.code, a.status,
+                b.f_name, b.l_name, a.email, b.mobile,
+                c.Name AS ctype, d.user_role, a.entity_id
+                FROM tbl_users a
+                JOIN tbl_contact b ON a.contact_Id = b.Id
+                JOIN tbl_contacttype c ON b.contacttype_Id = c.id
+                JOIN tbl_user_modules um ON um.user_id = a.id
+                JOIN tbl_user_role d ON um.user_role_id = d.id
+                WHERE a.user_status = 1
+                AND (a.user_name = ? OR a.email = ?)
+                AND a.entity_id = ?
+                AND d.id IN (1,6,7,8)
+                LIMIT 1";
         // Run the query using the DBController's runSingle method
         $result = $this->conn->runSingle($sql, [$username, $username, $entity_id]);
 
@@ -232,5 +242,15 @@ class UserLogin
                     LIMIT 1";
 
         return $this->conn->runSingle($query, [$userId, $entityId, $tokenHash]);
+    }
+
+    public function isAllowedForVendorDump($userId)
+    {
+        $query = "SELECT COUNT(*) as user_role FROM tbl_user_modules um 
+                    JOIN tbl_users u ON um.user_id = u.id WHERE u.id = ?
+                    AND um.user_role_id IN (1, 6, 7)";
+        $result = $this->conn->runSingle($query, [$userId]);
+        // returns true if user has one of the roles that are allowed to access vendor dump data, false otherwise
+        return $result['user_role'] > 0;
     }
 }

@@ -13,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Initialize logger
 $user = new UserLogin();
 $token = $user->getToken();
+$userId = $user->getUserIdFromJWT() ?: 'guest';
+$isAllowedForVendorDump = $user->isAllowedForVendorDump($userId);
 
 if (!$token) {
     http_response_code(401);
@@ -49,6 +51,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 
 $action = $_GET['action'] ?? null;
+
 $reference_id = $_GET['reference_id'] ?? null;
 $vendor_code = $input['vendor_code'] ?? null;
 $module = 'vms';
@@ -224,7 +227,32 @@ try {
                 exit();
             }
 
+
+
             $approvedStatus = $rfqReview->checkRfqStatus($reference_id, $module, $username);
+
+            if ($approvedStatus == 7 && $_GET['mode'] === 'auto-approve') {
+                // for initial data dump, allow auto-approval of RFQs that are in initial state (7) without requiring verification first
+                // this is to prevent having to manually verify thousands of RFQs in the initial dump
+                //  only users with can access this endpoint
+                if (!$isAllowedForVendorDump) {
+                    http_response_code(403);
+                    $error = ["error" => "Access denied: insufficient permissions"];
+                    echo json_encode($error);
+                    $logger->logRequestAndResponse($_GET, $error);
+                    break;
+                }
+                $result = $rfqReview->approveRfq($reference_id, $expiry_date, $module, $username);
+                if ($result) {
+                    http_response_code(200);
+                    echo json_encode(["message" => "RFQ approved successfully in auto-approve mode"]);
+                } else {
+                    http_response_code(500);
+                    echo json_encode(["error" => "Failed to approve RFQ"]);
+                }
+                break;
+                exit();
+            }
 
             if ($approvedStatus == 11) {
                 http_response_code(400);
@@ -418,7 +446,7 @@ try {
             }
 
             // prevent reinitiation if vendor is blocked or suspended
-            if(in_array($reinitiateStatus, [13, 14])) {
+            if (in_array($reinitiateStatus, [13, 14])) {
                 http_response_code(400);
                 echo json_encode(["error" => "Blocked or suspended vendors cannot be reinitiated. Please activate the vendor first."]);
                 exit();

@@ -40,6 +40,7 @@ class Rfq
         // reference id, entity name, vendor name, contact name, email, mobile, status - display in rfq list interface
         $query = "SELECT 
             r.id,
+            v.vendor_code,
             r.reference_id,
             r.vendor_name,
             r.contact_name,
@@ -50,6 +51,7 @@ class Rfq
             r.status,
             stat.status AS status_name,
             r.email_sent,
+            r.expiry_date,
             r.created_by,
             r.created_datetime,
             r.last_updated,
@@ -57,6 +59,7 @@ class Rfq
           FROM vms_rfqs r
           LEFT JOIN tbl_entity ent ON r.entity_id = ent.id
           LEFT JOIN tbl_status stat ON r.status = stat.id
+          LEFT JOIN vms_vendor v ON r.id = v.active_rfq
           LIMIT $limit OFFSET $offset";
 
         $this->logger->logQuery($query, [$limit, $offset], 'classes', $module, $username);
@@ -280,7 +283,7 @@ class Rfq
             return false;
         }
     }
-    
+
     // ---- END OF TEMPORARY FUNCTION ----
 
     public function updateRfq($id, $vendor_name, $contact_name, $email, $mobile, $entity_id, $status, $expiry_date, $last_updated, $module, $username)
@@ -364,6 +367,13 @@ class Rfq
         return $this->conn->runQuery($query);
     }
 
+    // get initiated RFQs to be dumped by admin team (existing vendor dump)
+    public function getInitiatedRfqsForDump($module, $username)
+    {
+        $query = 'SELECT id, reference_id, vendor_name FROM vms_rfqs WHERE status IN (7) ORDER BY vendor_name ASC';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        return $this->conn->runQuery($query);
+    }
 
 
     public function getAllSubmittedRfqs($module, $username)
@@ -449,6 +459,8 @@ class Rfq
         $this->logger->logQuery($query, [], 'classes', $module, $username);
         return $this->conn->runQuery($query);
     }
+
+
 
     // ✅ Get Vendor Details by ID
     public function getVendorById($id, $module, $username)
