@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 
-function verifyToken() {
+function verifyToken($required_portal) {
 
     $jwt = new JWTHandler();
 
@@ -59,9 +59,13 @@ function verifyToken() {
         exit();
     }
 
+    if (!in_array($required_portal, $allowed_domains)) {
+        http_response_code(403);
+        echo json_encode(["error" => "Access denied for this portal"]);
+        exit();
+    }
+
     
-    
-    $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
     http_response_code(200);
     echo json_encode(["message" => "Access granted"]);
     exit();
