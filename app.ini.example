@@ -38,7 +38,7 @@ redirectUri             = 'redirect uri'
 urlAuthorize            = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
 urlAccessToken          = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
 urlResourceOwnerDetails = ''
-scopes                  = 'User.ReadBasic.All User.Read.All Directory.Read.All IdentityProvider.Read.All openid profile email Contacts.Read'
+scopes                  = 'User.ReadBasic.All User.Read.All Directory.Read.All IdentityProvider.Read.All openid profile email Contacts.Read Sites.Read.All'
 
 ## cookie related configurations
 [session]
@@ -48,3 +48,7 @@ session.use_strict_mode = 1
 
 [portals]
 portals   =  "admin, vms, vendor, ams"
+
+[sharepoint-holiday-calendar]
+siteId = "site id"
+listId = "list id"
