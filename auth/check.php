@@ -24,24 +24,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 
 include_once('../classes/authentication/VerifyToken.php');
 
-$portal = $_GET['portal'];
+// $portal = $_GET['portal'];
 
-if (!isset($_GET['portal'])) {
-    http_response_code(400);
-    echo json_encode(["error" => "Portal parameter is required"]);
-    exit();
-}
+// if (!isset($_GET['portal'])) {
+//     http_response_code(400);
+//     echo json_encode(["error" => "Portal parameter is required"]);
+//     exit();
+// }
 
 $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
 $portals = array_map('trim', explode(',', $config['portals']['portals']));
 
-if (!in_array($portal, $portals)) {
-    http_response_code(400);
-    echo json_encode(["error" => "Invalid portal specified"]);
-    exit();
-}
+// if (!in_array($portal, $portals)) {
+//     http_response_code(400);
+//     echo json_encode(["error" => "Invalid portal specified"]);
+//     exit();
+// }
 
-$user = verifyToken($portal);
+$user = verifyToken();
 
 
 error_log("Received cookies: " . json_encode($_COOKIE));

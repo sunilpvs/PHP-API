@@ -82,7 +82,7 @@ if($type == 'vms'){
         http_response_code(403);
         echo json_encode([
             "error" => "Access denied",
-            "req_status" => $reqStatus ?? 'no_request'
+            "req_status" => $reqStatus
         ]);
         exit();
     }
@@ -102,7 +102,7 @@ if($type == 'ams'){
         http_response_code(403);
         echo json_encode([
             "error" => "Access denied",
-            "req_status" => $reqStatus ?? 'no_request'
+            "req_status" => $reqStatus
         ]);
         exit();
     }
@@ -121,7 +121,7 @@ if($type == 'admin'){
         http_response_code(403);
         echo json_encode([
             "error" => "Access denied",
-            "req_status" => $reqStatus ?? 'no_request'
+            "req_status" => $reqStatus
         ]);
         exit();
     }

@@ -45,6 +45,8 @@
         // Step 1. Get authorization code
         $authorizationUrl = $provider->getAuthorizationUrl([
             'state' => $portal, // Pass portal as state parameter
+            'prompt' => 'select_account', // Force account selection
+            'domain_hint' => 'organizations' // Optional: hint to show only organizational accounts
         ]);
         $_SESSION['oauth2state'] = $provider->getState();
         header('Location: ' . $authorizationUrl);

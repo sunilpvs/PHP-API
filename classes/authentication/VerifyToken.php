@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 
-function verifyToken($required_portal) {
+function verifyToken() {
 
     $jwt = new JWTHandler();
 
@@ -32,6 +32,13 @@ function verifyToken($required_portal) {
     }
 
     $verified = $jwt->verifyToken($token);
+
+    if (!$verified) {
+        http_response_code(401);
+        echo json_encode(["error" => "Invalid or expired token"]);
+        exit();
+    }
+
     $user = $verified->username ?? null;
     $allowed_domains = $verified->allowed_domains ?? null;
 
@@ -47,23 +54,17 @@ function verifyToken($required_portal) {
         exit();
     }
 
-    if (!$verified) {
-        http_response_code(401);
-        echo json_encode(["error" => "Invalid or expired token"]);
-        exit();
-    }
-
     if(empty(array_intersect($allowed_domains, $portals))) {
         http_response_code(401);
         echo json_encode(["error" => "Invalid allowed domains in token"]);
         exit();
     }
 
-    if (!in_array($required_portal, $allowed_domains)) {
-        http_response_code(403);
-        echo json_encode(["error" => "Access denied for this portal"]);
-        exit();
-    }
+    // if (!in_array($required_portal, $allowed_domains)) {
+    //     http_response_code(403);
+    //     echo json_encode(["error" => "Access denied for this portal"]);
+    //     exit();
+    // }
 
     
     http_response_code(200);

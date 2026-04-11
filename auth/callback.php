@@ -3,396 +3,413 @@
 // header("Access-Control-Allow-Credentials: true");
 // header("Access-Control-Allow-Headers: Content-Type, Authorization");
 // header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-    use myPHPnotes\Microsoft\Auth;
-    use myPHPnotes\Microsoft\Handlers\Session;
-    use Microsoft\Graph\Graph;
-    use Microsoft\Graph\Model;
-    
-    use Dotenv\Dotenv;
+use myPHPnotes\Microsoft\Auth;
+use myPHPnotes\Microsoft\Handlers\Session;
+use Microsoft\Graph\Graph;
+use Microsoft\Graph\Model;
 
-    session_start();
+use Dotenv\Dotenv;
 
-    require "../vendor/autoload.php";
-    require_once($_SERVER['DOCUMENT_ROOT'] . "/classes/authentication/JWTHandler.php");
-    require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
-    require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
+session_start();
+
+require "../vendor/autoload.php";
+require_once($_SERVER['DOCUMENT_ROOT'] . "/classes/authentication/JWTHandler.php");
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
 
 
-    $env = getenv('APP_ENV') ?: 'local';
-    if($env === 'production'){
-        $dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env.prod');
-    }else{
-        $dotenv= Dotenv::createImmutable(__DIR__ . '/../', '.env');
-    }
-    $dotenv->load();
+$env = getenv('APP_ENV') ?: 'local';
+if ($env === 'production') {
+    $dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env.prod');
+} else {
+    $dotenv = Dotenv::createImmutable(__DIR__ . '/../', '.env');
+}
+$dotenv->load();
 
-    $cookieDomain = $_ENV['COOKIE_DOMAIN'];
+$cookieDomain = $_ENV['COOKIE_DOMAIN'];
 
-    $dbObject = new DbController();
-    $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
-    $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
-    $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
-    $logger = new Logger($debugMode, $logDir);
-    $module = 'OAuth';
+$dbObject = new DbController();
+$config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
+$debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
+$logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
+$logger = new Logger($debugMode, $logDir);
+$module = 'OAuth';
 
-    // Load config
-    $ini_file_path = $_SERVER['DOCUMENT_ROOT'] . "/app.ini";
-    $config = parse_ini_file($ini_file_path);
+// Load config
+$ini_file_path = $_SERVER['DOCUMENT_ROOT'] . "/app.ini";
+$config = parse_ini_file($ini_file_path);
 
-    // $env = getenv('APP_ENV') ?: 'local';
-    // if($env === 'production'){
-    //     $tenant_id     = $config['prod_tenant_id'];
-    //     $client_id     = $config['prod_clientId'];
-    //     $client_secret = $config['prod_clientSecret'];
-    //     $redirect_uri  = $config['prod_redirectUri'];
-    //     $scopes        = explode(" ", $config['prod_scopes']);
-    
-    // }else{
-    //     $dotenv= Dotenv::createImmutable(__DIR__ . '/../', '.env');
-    // }
+// $env = getenv('APP_ENV') ?: 'local';
+// if($env === 'production'){
+//     $tenant_id     = $config['prod_tenant_id'];
+//     $client_id     = $config['prod_clientId'];
+//     $client_secret = $config['prod_clientSecret'];
+//     $redirect_uri  = $config['prod_redirectUri'];
+//     $scopes        = explode(" ", $config['prod_scopes']);
 
-    $tenant_id     = $config['tenant_id'];
-    $client_id     = $config['clientId'];
-    $client_secret = $config['clientSecret'];
-    $redirect_uri  = $_ENV['MICROSOFT_REDIRECT_URI'];
-    $scopes        = explode(" ", $config['scopes']);
+// }else{
+//     $dotenv= Dotenv::createImmutable(__DIR__ . '/../', '.env');
+// }
 
-    // Microsoft OAuth
-    $auth = new Auth($tenant_id, $client_id, $client_secret, $redirect_uri, $scopes);
-    $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
-    $msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
-    $auth->setAccessToken($msAccessToken);
+$tenant_id     = $config['tenant_id'];
+$client_id     = $config['clientId'];
+$client_secret = $config['clientSecret'];
+$redirect_uri  = $_ENV['MICROSOFT_REDIRECT_URI'];
+$scopes        = explode(" ", $config['scopes']);
 
-    // Fetch user details from Graph
-    $graph = new Graph();
-    $graph->setAccessToken($msAccessToken);
-    $me = $graph->createRequest("GET", "/me")->setReturnType(Model\User::class)->execute();
+// Microsoft OAuth
+$auth = new Auth($tenant_id, $client_id, $client_secret, $redirect_uri, $scopes);
+$tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
+$msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
+$auth->setAccessToken($msAccessToken);
 
-     // get the subdomain from state parameter
-    $subDomain = $_REQUEST['state'] ?? $_SESSION['portal'];
+// 🔐 Decode token to extract tenant ID
+$tokenParts = explode('.', $msAccessToken);
+$payload = json_decode(base64_decode($tokenParts[1]), true);
 
-    $email = $me->getMail() ?? $me->getUserPrincipalName();
-    $username = $email ?: 'guest';;
-    
+$tenantId = $payload['tid'] ?? null;
 
-    // Check if user exists in your DB
-    $query = 'SELECT email from tbl_users WHERE email = ?';
-    $params = [$email];
-    $logger->logQuery($query, $params, 'classes', $module, $username);
-    $existingUser = $dbObject->runQuery($query, $params, 'Check existing user by email from Microsoft OAuth');
+// ✅ Load allowed tenants from config
+$allowedTenants = array_map('trim', explode(',', $config['allowed_tenants'] ?? ''));
 
-    
-    if(!$existingUser){
-        // User does not exist, create new user
-    
-        // Create User based on OAuth details if not exists
-        $query = 'INSERT INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
+// 🚫 Reject if tenant not allowed
+if (!$tenantId || !in_array($tenantId, $allowedTenants)) {
+    http_response_code(403);
+    echo json_encode([
+        "error" => "Unauthorized tenant",
+        "tenant" => $tenantId
+    ]);
+    exit();
+}
+
+// Fetch user details from Graph
+$graph = new Graph();
+$graph->setAccessToken($msAccessToken);
+$me = $graph->createRequest("GET", "/me")->setReturnType(Model\User::class)->execute();
+
+// get the subdomain from state parameter
+$subDomain = $_REQUEST['state'] ?? $_SESSION['portal'];
+
+$email = $me->getMail() ?? $me->getUserPrincipalName();
+$username = $email ?: 'guest';;
+
+
+// Check if user exists in your DB
+$query = 'SELECT email from tbl_users WHERE email = ?';
+$params = [$email];
+$logger->logQuery($query, $params, 'classes', $module, $username);
+$existingUser = $dbObject->runQuery($query, $params, 'Check existing user by email from Microsoft OAuth');
+
+
+if (!$existingUser) {
+    // User does not exist, create new user
+
+    // Create User based on OAuth details if not exists
+    $query = 'INSERT INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
                         VALUES (?, ?, ?, ?, 1, 1, 1, 1, 6, 14, ?, ?, 1, 1)';
-        $mobilePhone = $me->getMobilePhone() ?? '';
-        $lname = $me->getSurname() ?? ' ';
-        $params = [$me->getGivenName(), $lname, $email, $email, $mobilePhone, 2];
-        $logger->logQuery($query, $params, 'classes', $module, $username);
-        $userInsertionId = $dbObject->insert($query, $params, 'User contact created from Microsoft OAuth');
-
-
-        // random password for user creation
-        $dummyPassword = bin2hex(random_bytes(8)); // 16 characters
-        $query = 'INSERT INTO tbl_users(user_name, email, password, user_status, contact_id, status, entity_id, createdBy)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-        $hashedPassword = password_hash($dummyPassword, PASSWORD_BCRYPT);
-        $params = [$email, $email, $hashedPassword, 1, $userInsertionId, 'verified', 1, 1]; 
-        $logger->logQuery($query, $params, 'classes', $module, $username);
-        $userId = $dbObject->insert($query, $params, 'User created from Microsoft OAuth with Base Employee role');
-        
-
-        $query = 'INSERT INTO tbl_user_modules(user_id, email, module_id, user_role_id, created_by)
-                        VALUES(?, ?, ?, ?, ?)';
-        $params = [$userId, $email, 2, 5, 1]; 
-        $logger->logQuery($query, $params, 'classes', $module, $username);
-        $userModuleId = $dbObject->insert($query, $params, 'User module mapping created from Microsoft OAuth with Base Employee role');
-
-
-
-        if(!$userId || !$userInsertionId || !$userModuleId)
-        {
-            // Handle error
-            http_response_code(500);
-            echo json_encode(["error" => "Failed to create user"]);
-            exit();
-        }
-    }
-
-    // get user ID for JWT
-    $query = 'SELECT id FROM tbl_users WHERE email = ?';
-    $params = [$email];
+    $mobilePhone = $me->getMobilePhone() ?? '';
+    $lname = $me->getSurname() ?? ' ';
+    $params = [$me->getGivenName(), $lname, $email, $email, $mobilePhone, 2];
     $logger->logQuery($query, $params, 'classes', $module, $username);
-    $result = $dbObject->runSingle($query, $params, 'Fetch user ID for JWT from Microsoft OAuth');
-    $userId = $result['id'];
+    $userInsertionId = $dbObject->insert($query, $params, 'User contact created from Microsoft OAuth');
 
-    // get allowed domains for this user
-    $query = "SELECT lower(m.module_name) as module FROM tbl_user_modules um 
+
+    // random password for user creation
+    $dummyPassword = bin2hex(random_bytes(8)); // 16 characters
+    $query = 'INSERT INTO tbl_users(user_name, email, password, user_status, contact_id, status, entity_id, createdBy)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+    $hashedPassword = password_hash($dummyPassword, PASSWORD_BCRYPT);
+    $params = [$email, $email, $hashedPassword, 1, $userInsertionId, 'verified', 1, 1];
+    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $userId = $dbObject->insert($query, $params, 'User created from Microsoft OAuth with Base Employee role');
+
+
+    $query = 'INSERT INTO tbl_user_modules(user_id, email, module_id, user_role_id, created_by)
+                        VALUES(?, ?, ?, ?, ?)';
+    $params = [$userId, $email, 2, 5, 1];
+    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $userModuleId = $dbObject->insert($query, $params, 'User module mapping created from Microsoft OAuth with Base Employee role');
+
+
+
+    if (!$userId || !$userInsertionId || !$userModuleId) {
+        // Handle error
+        http_response_code(500);
+        echo json_encode(["error" => "Failed to create user"]);
+        exit();
+    }
+}
+
+// get user ID for JWT
+$query = 'SELECT id FROM tbl_users WHERE email = ?';
+$params = [$email];
+$logger->logQuery($query, $params, 'classes', $module, $username);
+$result = $dbObject->runSingle($query, $params, 'Fetch user ID for JWT from Microsoft OAuth');
+$userId = $result['id'];
+
+// get allowed domains for this user
+$query = "SELECT lower(m.module_name) as module FROM tbl_user_modules um 
                 JOIN tbl_module m 
                 ON um.module_id = m.module_id 
                 WHERE um.email=?";
-    $params = [$email];
-    $logger->logQuery($query, $params, 'classes', $module, $username);
-    $allowedDomains = $dbObject->runQuery($query, $params, 'Fetch allowed domains for user from Microsoft OAuth');
+$params = [$email];
+$logger->logQuery($query, $params, 'classes', $module, $username);
+$allowedDomains = $dbObject->runQuery($query, $params, 'Fetch allowed domains for user from Microsoft OAuth');
 
-    $allowedDomains = array_column($allowedDomains, 'module'); // Extract module names into a simple array
+$allowedDomains = array_column($allowedDomains, 'module'); // Extract module names into a simple array
 
 
-    // get expiry time from Microsoft token response and normalize to a valid future Unix epoch
-    $now = time();
-    $msTokenExpiryEpoch = null;
+// get expiry time from Microsoft token response and normalize to a valid future Unix epoch
+$now = time();
+$msTokenExpiryEpoch = null;
 
-    if (isset($tokens->expires_on)) {
-        $expiresOn = $tokens->expires_on;
+if (isset($tokens->expires_on)) {
+    $expiresOn = $tokens->expires_on;
 
-        if (is_numeric($expiresOn)) {
-            $parsedExpiry = (int) $expiresOn;
+    if (is_numeric($expiresOn)) {
+        $parsedExpiry = (int) $expiresOn;
+        $msTokenExpiryEpoch = $parsedExpiry;
+    } else {
+        $parsedExpiry = strtotime((string) $expiresOn);
+        if ($parsedExpiry !== false) {
             $msTokenExpiryEpoch = $parsedExpiry;
-        } else {
-            $parsedExpiry = strtotime((string) $expiresOn);
-            if ($parsedExpiry !== false) {
-                $msTokenExpiryEpoch = $parsedExpiry;
-            }
         }
     }
+}
 
-    if ($msTokenExpiryEpoch === null && isset($tokens->expires_in) && is_numeric($tokens->expires_in)) {
-        $msTokenExpiryEpoch = $now + (int) $tokens->expires_in;
-    }
+if ($msTokenExpiryEpoch === null && isset($tokens->expires_in) && is_numeric($tokens->expires_in)) {
+    $msTokenExpiryEpoch = $now + (int) $tokens->expires_in;
+}
 
-    $sessionExpiryEpoch = $msTokenExpiryEpoch;
-
-
-    // Create custom JWT tokens
-    $jwt = new JWTHandler();
-    $jwtAccess = $jwt->generateAccessToken([
-
-        "sub" => $userId,
-        "username" => $email,
-        "auth_provider" => "microsoft",
-        "allowed_domains" => $allowedDomains,
-        "iat"   => $now,
-        "exp"   => $sessionExpiryEpoch
-
-    ]);
+$sessionExpiryEpoch = $msTokenExpiryEpoch;
 
 
-    $jwtRefresh = $jwt->generateRefreshToken([
-        
-        "sub" => $userId,
-        "username" => $email,
-        "auth_provider" => "microsoft",
-        "allowed_domains" => $allowedDomains,
-        "iat" => $now,
-        "exp" => $sessionExpiryEpoch
+// Create custom JWT tokens
+$jwt = new JWTHandler();
+$jwtAccess = $jwt->generateAccessToken([
 
-    ]);
+    "sub" => $userId,
+    "username" => $email,
+    "auth_provider" => "microsoft",
+    "allowed_domains" => $allowedDomains,
+    "iat"   => $now,
+    "exp"   => $sessionExpiryEpoch
 
-    
-
-    // ✅ Set real Microsoft token for Graph requests
-    setcookie("microsoft_access_token", $msAccessToken, [
-        "expires" => $sessionExpiryEpoch,
-        "path" => "/",
-        "secure" => true,
-        "domain" => $cookieDomain,
-        "httponly" => true,
-        "samesite" => "None",
-    ]);
+]);
 
 
-    // ✅ Set your custom JWT for API auth
-    setcookie("access_token", $jwtAccess, [
-        "expires" => $sessionExpiryEpoch,
-        "path" => "/",
-        "secure" => true,
-        "domain" => $cookieDomain,
-        "httponly" => true,
-        "samesite" => "None",
-    ]);
+$jwtRefresh = $jwt->generateRefreshToken([
 
-    setcookie("refresh_token", $jwtRefresh, [
-        "expires" => $sessionExpiryEpoch,
-        "path" => "/",
-        "secure" => true,
-        "domain" => $cookieDomain,
-        "httponly" => true,
-        "samesite" => "None",
-    ]);
+    "sub" => $userId,
+    "username" => $email,
+    "auth_provider" => "microsoft",
+    "allowed_domains" => $allowedDomains,
+    "iat" => $now,
+    "exp" => $sessionExpiryEpoch
 
-   $redirectPortal = $_GET['portal'] ?? $_SESSION['portal'] ?? 'default';
-
-    $redirectMap = [
-        'default' => $_ENV['INTERNAL_PORTAL_URL'],
-        'admin' => $_ENV['ADMIN_PORTAL_URL'],
-        'vms' => $_ENV['VMS_PORTAL_URL'],
-        'ams' => $_ENV['AMS_PORTAL_URL']
-    ];
-    
-    // Redirect to frontend
-    $redirectURI = $redirectMap[$redirectPortal] ?? $redirectMap['default'];
-    header("Location: $redirectURI");
-    exit;
-
-
-    //GET https://graph.microsoft.com/v1.0/users/87d349ed-44d7-43e1-9a83-5f2406dee5bd?$select=displayName,givenName,postalCode,identities
-    //$strVal = "id,displayName,givenName,postalCode,hireDate,assignedLicenses,accountEnabled,identities";
-
-    // // Commented after Class created - Start
-    // $strVal = "id,accountEnabled,employeeId,givenName,surname,displayName,birthday,mail,mobilePhone,businessPhones,faxNumber,preferredLanguage,userPrincipalName,userType,";
-    // $strVal .= "companyName,department,jobTitle,hireDate,employeeHireDate,employeeType,employeeOrgData,assignedLicenses,employeeLeaveDateTime,createdDateTime,creationType,identities,";
-    // $strVal .= "streetAddress,officeLocation,city,state,postalCode,country,usageLocation";
-
-    // $url = 'https://graph.microsoft.com/v1.0/me?$select='.$strVal;
-    // $headers = [
-    //      "Authorization: Bearer $accessToken",
-    //      "Content-Type: application/json",
-    //      "ConsistencyLevel: eventual"
-    //    ];
-
-    // //Getting User details
-    // $ch = curl_init();
-    // curl_setopt($ch, CURLOPT_URL, $url);
-    // curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    // curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    // $response = curl_exec($ch);
-    // curl_close($ch);
-    // $userDetails = json_decode($response, true);
-
-    
-    // if (isset($userDetails)) {
-    //     $_SESSION['user_details'] = $userDetails;
-    //     header('Location: /home');
-    //     exit;
-
-    // //Getting User manager details
-    // //$urlManager = 'https://graph.microsoft.com/v1.0/users/{id|userPrincipalName}/manager';
-    // $urlManager = 'https://graph.microsoft.com/v1.0/me/manager';
-    // $ch = curl_init();
-    // curl_setopt($ch, CURLOPT_URL, $urlManager);
-    // curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    // curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    // $resp = curl_exec($ch);
-    // curl_close($ch);
-    // $mgnrDetails = json_decode($resp, true);
+]);
 
 
 
-    // //Teja code
-    // $urlPic = 'https://graph.microsoft.com/v1.0/me/photo/$value';
+// ✅ Set real Microsoft token for Graph requests
+setcookie("microsoft_access_token", $msAccessToken, [
+    "expires" => $sessionExpiryEpoch,
+    "path" => "/",
+    "secure" => true,
+    "domain" => $cookieDomain,
+    "httponly" => true,
+    "samesite" => "None",
+]);
 
-    // $ch = curl_init();
-    // curl_setopt($ch, CURLOPT_URL, $urlPic);
-    // curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    // curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    // $respPic = curl_exec($ch);
-    // $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    // curl_close($ch);
-    
-    // if ($httpCode == 200 && $respPic !== false) {
-    //     $imgBase64 = base64_encode($respPic);
-    //     echo "<img src='data:image/jpeg;base64,{$imgBase64}' style='border:1px solid black; border-radius:10px; width:100px; height:125px;'>";
-    // } else {
-    //     echo "Failed to retrieve profile picture.";
-    // }
-    
 
-    // //end of Teja code    
-    // // Commented after Class created - End
+// ✅ Set your custom JWT for API auth
+setcookie("access_token", $jwtAccess, [
+    "expires" => $sessionExpiryEpoch,
+    "path" => "/",
+    "secure" => true,
+    "domain" => $cookieDomain,
+    "httponly" => true,
+    "samesite" => "None",
+]);
 
-    //     echo "Personal Information: ". "<br>";
-    //     //echo "Photo: <br> <img src={'data:image/jpeg;base64,' + ". Buffer.from($respPic.data, 'binary').toString('base64'). "}> </img><br>";
+setcookie("refresh_token", $jwtRefresh, [
+    "expires" => $sessionExpiryEpoch,
+    "path" => "/",
+    "secure" => true,
+    "domain" => $cookieDomain,
+    "httponly" => true,
+    "samesite" => "None",
+]);
 
-    //    // $image = $respPic;    
+$redirectPortal = $_GET['portal'] ?? $_SESSION['portal'] ?? 'default';
 
-    //     echo "ID: " . $userDetails['id'] . "<br>";
-    //     echo "Account Enabled: " . ($userDetails['accountEnabled'] ? 'Yes' : 'No') . "<br>";
-    //     echo "Employee ID: " . $userDetails['employeeId'] . "<br>";
-    //     echo "Given Name: " . $userDetails['givenName'] . "<br>";
-    //     echo "Surname: " . $userDetails['surname'] . "<br>";
-    //     echo "Display Name: " . $userDetails['displayName'] . "<br>";
-    //     echo "Birth Date: " . $userDetails['birthday'] . "<br>";
-    //     echo "Email ID: " . $userDetails['mail'] . "<br>";
-    //     echo "Mobile Phone: " . $userDetails['mobilePhone'] . "<br>";
-    //     echo "Business Phones: " . $userDetails['businessPhones'][0] . "<br>";
-    //     echo "Fax Number: " . $userDetails['faxNumber'] . "<br>";
-    //     echo "Preferred Language: " . $userDetails['preferredLanguage'] . "<br>";
-    //     echo "User principal Name: " . $userDetails['userPrincipalName'] . "<br><br>";
-    //     //echo "User Type: " . $userDetails['userType'] . "<br><br>";
+$redirectMap = [
+    'default' => $_ENV['INTERNAL_PORTAL_URL'],
+    'admin' => $_ENV['ADMIN_PORTAL_URL'],
+    'vms' => $_ENV['VMS_PORTAL_URL'],
+    'ams' => $_ENV['AMS_PORTAL_URL']
+];
 
-    //     echo "Address Information: ". "<br><br>";
-    //     echo "Street Address: " . $userDetails['streetAddress'] . "<br>";
-    //     echo "City: " . $userDetails['city'] . "<br>";
-    //     echo "State: " . $userDetails['state'] . "<br>";
-    //     echo "Postal Code: " . $userDetails['postalCode'] . "<br>";
-    //     echo "Country: " . $userDetails['country'] . "<br>";
-    //     echo "Usage Location: " . $userDetails['usageLocation'] . "<br>";
+// Redirect to frontend
+$redirectURI = $redirectMap[$redirectPortal] ?? $redirectMap['default'];
+header("Location: $redirectURI");
+exit;
 
-    //     echo "Organization Information: ". "<br>";
-    //     echo "Organization Name: " . $userDetails['companyName'] . "<br>";
-    //     echo "Office Location: " . $userDetails['officeLocation'] . "<br>";
-    //     echo "Reporting Manager: " . $mgnrDetails['displayName'] . "<br>";
-    //     echo "Emp Hire Date: " . $userDetails['employeeHireDate'] . "<br>";
-    //     //echo "Hire Date: " . $userDetails['hireDate'] . "<br>";
-    //     echo "Employee Type: " . $userDetails['employeeType'] . "<br>";
-    //     echo "Job Title: " . $userDetails['jobTitle'] . "<br>";
-    //     echo "Department: " . $userDetails['department'] . "<br>";
-    //     echo "Emp Org Data: " . $userDetails['employeeOrgData'] . "<br>";
-    //     //echo "Assigned Licenses: " . $userDetails['assignedLicenses'] . "<br>";
-    //     echo "License: " . $userDetails['assignedLicenses'][0]['skuId'] . "<br>";
-    //     echo "Employee Release Date: " . $userDetails['employeeLeaveDateTime'] . "<br>";
-    //     echo "Created Date: " . $userDetails['createdDateTime'] . "<br>";
-    //     echo "Creation Type: " . $userDetails['creationType'] . "<br><br>";
-    //     //echo "Identities: " . $userDetails['identities'] . "<br><br>";        
-        
-    // } else {
-    //     echo "Failed to retrieve user details.";
-    // }
-   
-    // $user = new User;
-    
-    // echo 'Id: ' . $user->data->getId() . '<br>';
-    // echo 'Given Name: ' . $user->data->getGivenName() . '<br>';
-    // echo 'Sur Name: ' . $user->data->getSurName() . '<br>';
-    // echo 'Display Name: ' . $user->data->getDisplayName() . '<br><br>';
 
-    // echo 'Job Title: ' . $user->data->getJobTitle() . '<br>';
-    // echo "Email: " . $user->data->getUserPrincipalName() . "<br>";
-    // echo 'Mobile Phone: ' . $user->data->getMobilePhone() . '<br><br>';
+//GET https://graph.microsoft.com/v1.0/users/87d349ed-44d7-43e1-9a83-5f2406dee5bd?$select=displayName,givenName,postalCode,identities
+//$strVal = "id,displayName,givenName,postalCode,hireDate,assignedLicenses,accountEnabled,identities";
 
-    // $tmp = $user->data->getCompanyName();
-    // echo 'Company Name: ' . $user->data->getCompanyName() . '<br>';
+// // Commented after Class created - Start
+// $strVal = "id,accountEnabled,employeeId,givenName,surname,displayName,birthday,mail,mobilePhone,businessPhones,faxNumber,preferredLanguage,userPrincipalName,userType,";
+// $strVal .= "companyName,department,jobTitle,hireDate,employeeHireDate,employeeType,employeeOrgData,assignedLicenses,employeeLeaveDateTime,createdDateTime,creationType,identities,";
+// $strVal .= "streetAddress,officeLocation,city,state,postalCode,country,usageLocation";
 
-    // echo 'Office Location: ' . $user->data->getOfficeLocation() . '<br>';
-    // echo 'Street Address: ' . $user->data->getStreetAddress() . '<br>';
-    // echo 'City: ' . $user->data->getCity() . '<br>';
-    // echo 'State: ' . $user->data->getState() . '<br>';
-    // echo 'Country: ' . $user->data->getCountry() . '<br>';
-    // echo 'Postal Code: ' . $user->data->getPostalCode() . '<br>';
-    // echo 'Usage Location: ' . $user->data->getUsageLocation() . '<br><br>';
-    
-    // //getPhoneNumber()businessPhones
-    // //echo 'Business Phones: ' . $user->data->getBusinessPhones() . '<br>';   
-    // echo 'EmployeeId: ' . $user->data->getEmployeeId() . '<br>';
-    // //echo 'Employee Hire Date: ' . $user->data->getEmployeeHireDate() . '<br>';
-    // echo 'Employee Hire Date: ' . $user->data->getHireDate() . '<br>';
-    // echo 'Employee Type: ' . $user->data->getEmployeeType() . '<br>';
-    // echo 'Department: ' . $user->data->getDepartment() . '<br>';  
-    // echo 'Reporting Manager: ' . $user->data->getManager() . '<br>';
-    // echo 'Member Of: ' . $user->data->getMemberOf() . '<br>';
-    // echo 'CreatedDateTime: ' . $user->data->getCreatedDateTime() . '<br><br>';
+// $url = 'https://graph.microsoft.com/v1.0/me?$select='.$strVal;
+// $headers = [
+//      "Authorization: Bearer $accessToken",
+//      "Content-Type: application/json",
+//      "ConsistencyLevel: eventual"
+//    ];
 
-    // echo 'Assigned Licenses: ' . $user->data->getAssignedLicenses() . '<br>';
-    // $isEnabled = $user->data->getAccountEnabled();
-    // if($isEnabled)
-    // {
-    //     echo "Account Enabled = TRUE";
-    // }
-    // echo 'Account Enabled: ' . $user->data->getAccountEnabled() . '<br>';
-    // echo 'Account Enabled: ' . $isEnabled . '<br>';
-    // echo 'Authorization Info: ' . $user->data->getAuthorizationInfo() . '<br>';
-    // echo 'License Details: ' . $user->data->getLicenseDetails() . '<br>';
-?>
+// //Getting User details
+// $ch = curl_init();
+// curl_setopt($ch, CURLOPT_URL, $url);
+// curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+// curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+// $response = curl_exec($ch);
+// curl_close($ch);
+// $userDetails = json_decode($response, true);
+
+
+// if (isset($userDetails)) {
+//     $_SESSION['user_details'] = $userDetails;
+//     header('Location: /home');
+//     exit;
+
+// //Getting User manager details
+// //$urlManager = 'https://graph.microsoft.com/v1.0/users/{id|userPrincipalName}/manager';
+// $urlManager = 'https://graph.microsoft.com/v1.0/me/manager';
+// $ch = curl_init();
+// curl_setopt($ch, CURLOPT_URL, $urlManager);
+// curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+// curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+// $resp = curl_exec($ch);
+// curl_close($ch);
+// $mgnrDetails = json_decode($resp, true);
+
+
+
+// //Teja code
+// $urlPic = 'https://graph.microsoft.com/v1.0/me/photo/$value';
+
+// $ch = curl_init();
+// curl_setopt($ch, CURLOPT_URL, $urlPic);
+// curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+// curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+// $respPic = curl_exec($ch);
+// $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+// curl_close($ch);
+
+// if ($httpCode == 200 && $respPic !== false) {
+//     $imgBase64 = base64_encode($respPic);
+//     echo "<img src='data:image/jpeg;base64,{$imgBase64}' style='border:1px solid black; border-radius:10px; width:100px; height:125px;'>";
+// } else {
+//     echo "Failed to retrieve profile picture.";
+// }
+
+
+// //end of Teja code    
+// // Commented after Class created - End
+
+//     echo "Personal Information: ". "<br>";
+//     //echo "Photo: <br> <img src={'data:image/jpeg;base64,' + ". Buffer.from($respPic.data, 'binary').toString('base64'). "}> </img><br>";
+
+//    // $image = $respPic;    
+
+//     echo "ID: " . $userDetails['id'] . "<br>";
+//     echo "Account Enabled: " . ($userDetails['accountEnabled'] ? 'Yes' : 'No') . "<br>";
+//     echo "Employee ID: " . $userDetails['employeeId'] . "<br>";
+//     echo "Given Name: " . $userDetails['givenName'] . "<br>";
+//     echo "Surname: " . $userDetails['surname'] . "<br>";
+//     echo "Display Name: " . $userDetails['displayName'] . "<br>";
+//     echo "Birth Date: " . $userDetails['birthday'] . "<br>";
+//     echo "Email ID: " . $userDetails['mail'] . "<br>";
+//     echo "Mobile Phone: " . $userDetails['mobilePhone'] . "<br>";
+//     echo "Business Phones: " . $userDetails['businessPhones'][0] . "<br>";
+//     echo "Fax Number: " . $userDetails['faxNumber'] . "<br>";
+//     echo "Preferred Language: " . $userDetails['preferredLanguage'] . "<br>";
+//     echo "User principal Name: " . $userDetails['userPrincipalName'] . "<br><br>";
+//     //echo "User Type: " . $userDetails['userType'] . "<br><br>";
+
+//     echo "Address Information: ". "<br><br>";
+//     echo "Street Address: " . $userDetails['streetAddress'] . "<br>";
+//     echo "City: " . $userDetails['city'] . "<br>";
+//     echo "State: " . $userDetails['state'] . "<br>";
+//     echo "Postal Code: " . $userDetails['postalCode'] . "<br>";
+//     echo "Country: " . $userDetails['country'] . "<br>";
+//     echo "Usage Location: " . $userDetails['usageLocation'] . "<br>";
+
+//     echo "Organization Information: ". "<br>";
+//     echo "Organization Name: " . $userDetails['companyName'] . "<br>";
+//     echo "Office Location: " . $userDetails['officeLocation'] . "<br>";
+//     echo "Reporting Manager: " . $mgnrDetails['displayName'] . "<br>";
+//     echo "Emp Hire Date: " . $userDetails['employeeHireDate'] . "<br>";
+//     //echo "Hire Date: " . $userDetails['hireDate'] . "<br>";
+//     echo "Employee Type: " . $userDetails['employeeType'] . "<br>";
+//     echo "Job Title: " . $userDetails['jobTitle'] . "<br>";
+//     echo "Department: " . $userDetails['department'] . "<br>";
+//     echo "Emp Org Data: " . $userDetails['employeeOrgData'] . "<br>";
+//     //echo "Assigned Licenses: " . $userDetails['assignedLicenses'] . "<br>";
+//     echo "License: " . $userDetails['assignedLicenses'][0]['skuId'] . "<br>";
+//     echo "Employee Release Date: " . $userDetails['employeeLeaveDateTime'] . "<br>";
+//     echo "Created Date: " . $userDetails['createdDateTime'] . "<br>";
+//     echo "Creation Type: " . $userDetails['creationType'] . "<br><br>";
+//     //echo "Identities: " . $userDetails['identities'] . "<br><br>";        
+
+// } else {
+//     echo "Failed to retrieve user details.";
+// }
+
+// $user = new User;
+
+// echo 'Id: ' . $user->data->getId() . '<br>';
+// echo 'Given Name: ' . $user->data->getGivenName() . '<br>';
+// echo 'Sur Name: ' . $user->data->getSurName() . '<br>';
+// echo 'Display Name: ' . $user->data->getDisplayName() . '<br><br>';
+
+// echo 'Job Title: ' . $user->data->getJobTitle() . '<br>';
+// echo "Email: " . $user->data->getUserPrincipalName() . "<br>";
+// echo 'Mobile Phone: ' . $user->data->getMobilePhone() . '<br><br>';
+
+// $tmp = $user->data->getCompanyName();
+// echo 'Company Name: ' . $user->data->getCompanyName() . '<br>';
+
+// echo 'Office Location: ' . $user->data->getOfficeLocation() . '<br>';
+// echo 'Street Address: ' . $user->data->getStreetAddress() . '<br>';
+// echo 'City: ' . $user->data->getCity() . '<br>';
+// echo 'State: ' . $user->data->getState() . '<br>';
+// echo 'Country: ' . $user->data->getCountry() . '<br>';
+// echo 'Postal Code: ' . $user->data->getPostalCode() . '<br>';
+// echo 'Usage Location: ' . $user->data->getUsageLocation() . '<br><br>';
+
+// //getPhoneNumber()businessPhones
+// //echo 'Business Phones: ' . $user->data->getBusinessPhones() . '<br>';   
+// echo 'EmployeeId: ' . $user->data->getEmployeeId() . '<br>';
+// //echo 'Employee Hire Date: ' . $user->data->getEmployeeHireDate() . '<br>';
+// echo 'Employee Hire Date: ' . $user->data->getHireDate() . '<br>';
+// echo 'Employee Type: ' . $user->data->getEmployeeType() . '<br>';
+// echo 'Department: ' . $user->data->getDepartment() . '<br>';  
+// echo 'Reporting Manager: ' . $user->data->getManager() . '<br>';
+// echo 'Member Of: ' . $user->data->getMemberOf() . '<br>';
+// echo 'CreatedDateTime: ' . $user->data->getCreatedDateTime() . '<br><br>';
+
+// echo 'Assigned Licenses: ' . $user->data->getAssignedLicenses() . '<br>';
+// $isEnabled = $user->data->getAccountEnabled();
+// if($isEnabled)
+// {
+//     echo "Account Enabled = TRUE";
+// }
+// echo 'Account Enabled: ' . $user->data->getAccountEnabled() . '<br>';
+// echo 'Account Enabled: ' . $isEnabled . '<br>';
+// echo 'Authorization Info: ' . $user->data->getAuthorizationInfo() . '<br>';
+// echo 'License Details: ' . $user->data->getLicenseDetails() . '<br>';
