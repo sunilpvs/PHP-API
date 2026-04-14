@@ -61,7 +61,6 @@ $scopes        = explode(" ", $config['scopes']);
 $auth = new Auth($tenant_id, $client_id, $client_secret, $redirect_uri, $scopes);
 $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
 $msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
-var_dump($msAccessToken);
 $auth->setAccessToken($msAccessToken);
 
 // 🔐 Decode token to extract tenant ID
@@ -92,7 +91,7 @@ if (!$payload) {
 $tenantId = $payload['tid'] ?? null;
 
 
-var_dump($tenantId);
+
 
 // ✅ Load allowed tenants from config
 $allowedTenants = array_map('trim', explode(',', $config['allowed_tenants'] ?? ''));
