@@ -61,13 +61,38 @@ $scopes        = explode(" ", $config['scopes']);
 $auth = new Auth($tenant_id, $client_id, $client_secret, $redirect_uri, $scopes);
 $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
 $msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
+var_dump($msAccessToken);
 $auth->setAccessToken($msAccessToken);
 
 // 🔐 Decode token to extract tenant ID
+function base64UrlDecode($data) {
+    $remainder = strlen($data) % 4;
+    if ($remainder) {
+        $data .= str_repeat('=', 4 - $remainder);
+    }
+    return base64_decode(strtr($data, '-_', '+/'));
+}
+
 $tokenParts = explode('.', $msAccessToken);
-$payload = json_decode(base64_decode($tokenParts[1]), true);
+
+if (count($tokenParts) !== 3) {
+    http_response_code(400);
+    echo json_encode(["error" => "Invalid JWT structure"]);
+    exit();
+}
+
+$payload = json_decode(base64UrlDecode($tokenParts[1]), true);
+
+if (!$payload) {
+    http_response_code(400);
+    echo json_encode(["error" => "Failed to decode token"]);
+    exit();
+}
 
 $tenantId = $payload['tid'] ?? null;
+
+
+var_dump($tenantId);
 
 // ✅ Load allowed tenants from config
 $allowedTenants = array_map('trim', explode(',', $config['allowed_tenants'] ?? ''));
