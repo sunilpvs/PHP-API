@@ -63,6 +63,16 @@ $tokens = $auth->getToken($_REQUEST['code'], Session::get("state"));
 $msAccessToken = $tokens->access_token; // ✅ Real Microsoft token
 $auth->setAccessToken($msAccessToken);
 
+// $idToken = $tokens->id_token ?? null;
+
+// var_dump($idToken); // Debug: Check if ID token is present
+
+// $idToken = $tokens->id_token;
+
+// $payload = json_decode(base64UrlDecode(explode('.', $idToken)[1]), true);
+
+// $roles = $payload['roles'] ?? [];
+
 // 🔐 Decode token to extract tenant ID
 function base64UrlDecode($data) {
     $remainder = strlen($data) % 4;
