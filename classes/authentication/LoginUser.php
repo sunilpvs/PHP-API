@@ -122,8 +122,6 @@ class UserLogin
         // if token is not found, return error 
         if (!$token) {
             return null;
-            http_response_code(401);
-            echo json_encode(["error" => "Token not found"]);
         }
 
         $decodedToken = $this->jwt->decodeJWT($token);
@@ -252,5 +250,24 @@ class UserLogin
         $result = $this->conn->runSingle($query, [$userId]);
         // returns true if user has one of the roles that are allowed to access vendor dump data, false otherwise
         return $result['user_role'] > 0;
+    }
+
+    public function getMicrosoftAccessToken(){
+        $microsoftToken = $_COOKIE['microsoft_access_token'] ?? null;
+
+        if (!$microsoftToken) {
+            $headers = getallheaders();
+            if (isset($headers['Authorization']) && preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {
+                $microsoftToken = $matches[1];
+            }
+        }
+
+        if (!$microsoftToken) {
+            http_response_code(401);
+            echo json_encode(["error" => "Microsoft access token not found"]);
+            exit;
+        }
+
+        return $microsoftToken;
     }
 }

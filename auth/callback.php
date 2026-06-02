@@ -131,12 +131,17 @@ $username = $email ?: 'guest';;
 // Check if user exists in your DB
 $query = 'SELECT email from tbl_users WHERE email = ?';
 $params = [$email];
-$logger->logQuery($query, $params, 'classes', $module, $username);
-$existingUser = $dbObject->runQuery($query, $params, 'Check existing user by email from Microsoft OAuth');
+$logger->logQuery($query, $params, 'classes', $module);
+$existingUser = $dbObject->runQuery($query, $params);
 
 
 if (!$existingUser) {
     // User does not exist, create new user
+
+    // Get manager details
+    $manager = $graph->createRequest("GET", "/me/manager")->setReturnType(Model\User::class)->execute();
+    $managerEmail = $manager->getMail() ?? $manager->getUserPrincipalName() ?? '';
+    $managerName = $manager->getDisplayName() ?? '';
 
     // Create User based on OAuth details if not exists
     $query = 'INSERT INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
@@ -144,24 +149,24 @@ if (!$existingUser) {
     $mobilePhone = $me->getMobilePhone() ?? '';
     $lname = $me->getSurname() ?? ' ';
     $params = [$me->getGivenName(), $lname, $email, $email, $mobilePhone, 2];
-    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $logger->logQuery($query, $params, 'classes', $module);
     $userInsertionId = $dbObject->insert($query, $params, 'User contact created from Microsoft OAuth');
 
 
     // random password for user creation
     $dummyPassword = bin2hex(random_bytes(8)); // 16 characters
-    $query = 'INSERT INTO tbl_users(user_name, email, password, user_status, contact_id, status, entity_id, createdBy)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+    $query = 'INSERT INTO tbl_users(user_name, email, password, user_status, contact_id, status, entity_id, createdBy, manager, manager_email)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     $hashedPassword = password_hash($dummyPassword, PASSWORD_BCRYPT);
-    $params = [$email, $email, $hashedPassword, 1, $userInsertionId, 'verified', 1, 1];
-    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $params = [$email, $email, $hashedPassword, 1, $userInsertionId, 'verified', 1, 1, $managerName, $managerEmail];
+    $logger->logQuery($query, $params, 'classes', $module);
     $userId = $dbObject->insert($query, $params, 'User created from Microsoft OAuth with Base Employee role');
 
 
     $query = 'INSERT INTO tbl_user_modules(user_id, email, module_id, user_role_id, created_by)
                         VALUES(?, ?, ?, ?, ?)';
     $params = [$userId, $email, 2, 5, 1];
-    $logger->logQuery($query, $params, 'classes', $module, $username);
+    $logger->logQuery($query, $params, 'classes', $module);
     $userModuleId = $dbObject->insert($query, $params, 'User module mapping created from Microsoft OAuth with Base Employee role');
 
 

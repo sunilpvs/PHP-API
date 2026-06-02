@@ -56,7 +56,7 @@ if($type == 'default'){
     if($defaultAccess>0){
         http_response_code(200);
         echo json_encode([
-            "default_access" => "granted",
+            "message" => "granted",
         ]);
         exit();
     } else {
@@ -75,7 +75,8 @@ if($type == 'vms'){
     if($vmsAccess>0){
         http_response_code(200);
         echo json_encode([
-            "vms_access" => "granted",
+            "message" => "granted",
+            "req_status" => $reqStatus
         ]);
         exit();
     } else {
@@ -95,7 +96,8 @@ if($type == 'ams'){
     if($amsAccess>0){
         http_response_code(200);
         echo json_encode([
-            "ams_access" => "granted",
+            "message" => "granted",
+            "req_status" => $reqStatus
         ]);
         exit();
     } else {
@@ -114,7 +116,8 @@ if($type == 'admin'){
     if($adminAccess>0){
         http_response_code(200);
         echo json_encode([
-            "admin_access" => "granted",
+            "message" => "granted",
+            "req_status" => $reqStatus
         ]);
         exit();
     } else {
