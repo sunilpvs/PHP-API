@@ -74,7 +74,8 @@ $auth->setAccessToken($msAccessToken);
 // $roles = $payload['roles'] ?? [];
 
 // 🔐 Decode token to extract tenant ID
-function base64UrlDecode($data) {
+function base64UrlDecode($data)
+{
     $remainder = strlen($data) % 4;
     if ($remainder) {
         $data .= str_repeat('=', 4 - $remainder);
@@ -139,9 +140,29 @@ if (!$existingUser) {
     // User does not exist, create new user
 
     // Get manager details
-    $manager = $graph->createRequest("GET", "/me/manager")->setReturnType(Model\User::class)->execute();
-    $managerEmail = $manager->getMail() ?? $manager->getUserPrincipalName() ?? '';
-    $managerName = $manager->getDisplayName() ?? '';
+    // handle case where user might not have a manager assigned in Azure AD
+    $manager = null;
+
+    try {
+
+        $manager = $graph->createRequest("GET", "/me/manager")
+            ->setReturnType(Model\User::class)
+            ->execute();
+    } catch (\Throwable $e) {
+
+        $logger->log(
+            "Manager lookup failed for $email : " . $e->getMessage(),
+            'classes',
+            $module
+        );
+
+        $manager = null;
+    }
+
+    $managerName = $manager ? $manager->getDisplayName() : 'No Manager';
+    $managerEmail = $manager
+        ? ($manager->getMail() ?? $manager->getUserPrincipalName())
+        : 'No Manager Email';
 
     // Create User based on OAuth details if not exists
     $query = 'INSERT INTO tbl_contact (f_name, l_name, email, personal_email, city, state, country, emp_status, department, designation, mobile, contacttype_id, entity_id, createdBy) 
