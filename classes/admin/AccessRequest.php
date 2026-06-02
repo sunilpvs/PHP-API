@@ -94,9 +94,17 @@ class AccessRequest
 
     public function getTotalUsersCount($module, $username)
     {
-        $query = "SELECT COUNT(*) AS total FROM tbl_user_modules WHERE enabled=1";
-        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        $query = "SELECT COUNT(*) AS total
+              FROM tbl_user_modules b
+              JOIN tbl_module c ON b.module_id = c.module_id
+              JOIN tbl_users user ON b.user_id = user.id
+              JOIN tbl_contact a ON user.contact_id = a.id
+              JOIN tbl_user_role d ON b.user_role_id = d.id
+              WHERE b.enabled = 1
+              AND user.id NOT IN (1,2)";
+
         $result = $this->conn->runSingle($query);
+
         return isset($result['total']) ? (int)$result['total'] : 0;
     }
 
@@ -335,13 +343,13 @@ class AccessRequest
             // If rejected, no changes to user modules
         }
 
-        if($requested_module_id == 4){
+        if ($requested_module_id == 4) {
             $requested_module_name = "Vendor Management System";
-        } else if($requested_module_id == 1){
+        } else if ($requested_module_id == 1) {
             $requested_module_name = "Admin Portal";
-        } else if($requested_module_id == 3){
+        } else if ($requested_module_id == 3) {
             $requested_module_name = "Warehouse Management System";
-        } else if($requested_module_id == 5){
+        } else if ($requested_module_id == 5) {
             $requested_module_name = "Asset Management System";
         } else {
             $requested_module_name = "Unknown Module";
