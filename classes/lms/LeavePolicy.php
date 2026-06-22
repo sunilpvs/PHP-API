@@ -29,20 +29,19 @@ class LeavePolicy {
     }
 
     public function getAllLeavePolicies($module,  $username) {
-        $query = 'SELECT lp.*, lt.leave_type_name FROM tbl_leave_policy lp JOIN tbl_leave_types lt ON lp.leave_type = lt.id';
+        $query = 'SELECT lp.id, lp.leave_type AS leave_type_id, lt.leave_type_name AS leave_type, lp.annual_quota, lp.year, lp.carry_forward FROM tbl_leave_policy lp JOIN tbl_leave_types lt ON lp.leave_type = lt.id';
         $this->logger->logQuery($query, [], 'classes', $module,  $username);
         return $this->conn->runQuery($query);
     }
 
     public function getLeavePolicyById($id, $module, $username) {
-        $query = 'SELECT lp.*, lt.leave_type_name FROM tbl_leave_policy lp JOIN tbl_leave_types lt ON lp.leave_type = lt.id WHERE lp.id = ?';
+        $query = 'SELECT lp.id, lp.leave_type AS leave_type_id, lt.leave_type_name AS leave_type, lp.annual_quota, lp.year, lp.carry_forward FROM tbl_leave_policy lp JOIN tbl_leave_types lt ON lp.leave_type = lt.id WHERE lp.id = ?';
         $this->logger->logQuery($query, [$id], 'classes', $module, $username);
         $result = $this->conn->runQuery($query, [$id]);
         return isset($result[0]) ? $result[0] : null;
     }
 
     // Additional methods for creating, updating, and deleting leave policies can be added here
-
     public function getLeavePoliciesCount($module, $username) {
         $query = 'SELECT COUNT(*) AS total FROM tbl_leave_policy';
         $this->logger->logQuery($query, [], 'classes', $module, $username);
@@ -69,7 +68,7 @@ class LeavePolicy {
     }
 
     public function getLeavePoliciesByYear($year, $module, $username) {
-        $query = 'SELECT lp.*, lt.leave_type_name FROM tbl_leave_policy lp JOIN tbl_leave_types lt ON lp.leave_type = lt.id WHERE lp.year = ?';
+        $query = 'SELECT lp.id, lp.leave_type AS leave_type_id, lt.leave_type_name AS leave_type, lp.annual_quota, lp.year, lp.carry_forward FROM tbl_leave_policy lp JOIN tbl_leave_types lt ON lp.leave_type = lt.id WHERE lp.year = ?';
         $this->logger->logQuery($query, [$year], 'classes', $module, $username);
         return $this->conn->runQuery($query, [$year]);
     }

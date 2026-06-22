@@ -216,15 +216,19 @@ class DBController
             return;
         }
 
-        $auth = new UserLogin();
-        $this->userId = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 0; // default to 0 if not found or initial or system
-        $sql = "INSERT INTO vw_activitylog (`datetime`, `activity`, `log`, `user_id`)
-                VALUES (NOW(), :activity, :log, :user_id)";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->execute([
-            ':activity' => $message,
-            ':log' => strlen($query) > 1000 ? substr($query, 0, 1000) : $query,
-            ':user_id' => $this->userId
-        ]);
+        try {
+            $auth = new UserLogin();
+            $this->userId = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 0; // default to 0 if not found or initial or system
+            $sql = "INSERT INTO vw_activitylog (`datetime`, `activity`, `log`, `user_id`)
+                    VALUES (NOW(), :activity, :log, :user_id)";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute([
+                ':activity' => strlen($message) > 1000 ? substr($message, 0, 1000) : $message,
+                ':log' => 0,
+                ':user_id' => $this->userId
+            ]);
+        } catch (PDOException $ex) {
+            // Activity logging must never break business writes.
+        }
     }
 }

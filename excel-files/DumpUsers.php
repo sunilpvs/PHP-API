@@ -162,6 +162,7 @@ INSERT INTO tbl_m365_users (
 	phone_number,
 	manager_name,
 	manager_upn,
+	mail_box_type,
 	manager_id
 ) VALUES (
 	:id,
@@ -178,6 +179,7 @@ INSERT INTO tbl_m365_users (
 	:phone_number,
 	:manager_name,
 	:manager_upn,
+	:mail_box_type,
 	:manager_id
 )
 SQL;
@@ -200,6 +202,7 @@ SQL;
 			':phone_number' => $row['phonenumber'] ?? null,
 			':manager_name' => $row['managername'] ?? null,
 			':manager_upn' => $row['managerupn'] ?? null,
+			':mail_box_type' => $row['mailboxtype'] ?? null,
 			':manager_id' => $row['managerid'] ?? null,
 		]);
 	}

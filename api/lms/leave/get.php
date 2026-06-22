@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/lms/LeaveRequests.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/authentication/middle.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/authentication/LoginUser.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/Logger.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
 
 // Validate login and authenticate JWT
 authenticateJWT();

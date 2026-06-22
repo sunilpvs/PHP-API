@@ -26,13 +26,20 @@ class LeaveTypes {
     }
 
     public function getAllLeaveTypes($module,  $username) {
-        $query = 'SELECT * FROM tbl_leave_types';
+        $query = 'SELECT id, leave_type_name, description FROM tbl_leave_types';
         $this->logger->logQuery($query, [], 'classes', $module,  $username);
         return $this->conn->runQuery($query);
     }
 
+    public function getLeaveTypeCombo($module, $username) {
+        $query = 'SELECT id, leave_type_name FROM tbl_leave_types';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        return $this->conn->runQuery($query);
+    }
+
+
     public function getLeaveTypeById($id, $module, $username) {
-        $query = 'SELECT * FROM tbl_leave_types WHERE id = ?';
+        $query = 'SELECT id, leave_type_name, description FROM tbl_leave_types WHERE id = ?';
         $this->logger->logQuery($query, [$id], 'classes', $module, $username);
         $result = $this->conn->runQuery($query, [$id]);
         return isset($result[0]) ? $result[0] : null;

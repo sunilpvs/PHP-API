@@ -31,9 +31,9 @@ $user = new UserLogin();
 $token = $user->getToken();
 
 // get siteId and listId from app.ini
-$app = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . "/app.ini");
-$siteId = $app['siteId'];
-$listId = $app['listId'];
+$app = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . "/app.ini", true);
+$siteId = $app['sharepoint-holiday-calendar']['siteId'];
+$listId = $app['sharepoint-holiday-calendar']['listId'];
 
 if(!$token){
     http_response_code(401);
