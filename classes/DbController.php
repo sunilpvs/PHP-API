@@ -116,6 +116,22 @@ class DBController
         }
     }
 
+    public function createTable($query, $logMessage = '')
+    {
+        try {
+            $this->conn->exec($query);
+            if ($logMessage) {
+                $logMessage .= " - Table created successfully.";
+            } else {
+                $logMessage = "Table created successfully.";
+            }
+            // $this->logActivity($logMessage, $query);
+            return true;
+        } catch (PDOException $ex) {
+            throw $ex;
+        }
+    }
+
     public function insertBatch($query, $paramsArray = [], $logMessage = '')
     {
         try {
