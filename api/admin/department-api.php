@@ -9,6 +9,8 @@ require_once __DIR__ . '../../../classes/admin/Department.php';
 require_once __DIR__ . '../../../classes/authentication/middle.php';
 require_once __DIR__ . '../../../classes/Logger.php';
 require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
+require_once __DIR__ . '../../../classes/utils/ExcelHelper.php';
+require_once __DIR__ . '../../../classes/utils/ExcelTemplateHelper.php';
 
 authenticateJWT();
 
@@ -17,12 +19,15 @@ $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($con
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
 $regExp = '/^[a-zA-Z\s]+$/';
+$departmentConfigFilePath = __DIR__ . '../../../excel-config/admin/department.ini';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
 $departmentOb = new Department();
 $auth = new UserLogin();
+$excelHelper = new ExcelHelper($departmentConfigFilePath);
+$excelTemplateHelper = new ExcelTemplateHelper($departmentConfigFilePath);
 $username = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 'guest';
 // $username = 'guest';
 $module = 'Admin';
@@ -30,6 +35,20 @@ $module = 'Admin';
 switch ($method) {
     case 'GET':
         $logger->log("GET request received");
+
+        // download template file
+        if (isset($_GET['download-template']) && $_GET['download-template'] == 'true') {
+            try {
+                $excelTemplateHelper->generateTemplate();
+                http_response_code(200);
+                echo json_encode(["message" => "Template generated successfully."]);
+            } catch (Exception $e) {
+                http_response_code(500);
+                echo json_encode(["error" => $e->getMessage()]);
+            }
+            break;
+        }
+        
 
         if (isset($_GET['id'])) {
             $id = intval($_GET['id']);
@@ -75,6 +94,23 @@ switch ($method) {
 
     case 'POST':
         $logger->log("POST request received");
+
+        // File Upload Handling for Excel Import
+        if (isset($_FILES['file'])) {
+            try {
+                $file = $_FILES['file'];
+                $excelHelper->createTemporaryTable();
+                $batchId = $excelHelper->importExcelToTemporaryTable($file);
+                $errorReport = $departmentOb->insertDepartmentsFromExcel($batchId, $username);
+                $excelHelper->cleanTemporaryTable($batchId);
+                http_response_code(200);
+                echo json_encode(["message" => "Data imported and inserted successfully.", "errors" => $errorReport]);
+            } catch (Exception $e) {
+                http_response_code(500);
+                echo json_encode(["error" => $e->getMessage()]);
+            }
+            break;
+        }
 
         if (!isset($input['name']) || empty(trim($input['name']))) {
             http_response_code(400);

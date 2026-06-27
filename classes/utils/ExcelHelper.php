@@ -71,8 +71,6 @@ class ExcelHelper
         $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($file['tmp_name']);
         $sheet = $spreadsheet->getSheetByName($this->sheetName);
-        $highestRow = $sheet->getHighestRow();
-        var_dump($highestRow); // Debugging line to check the highest row
 
         if (!$sheet) {
             throw new Exception("Sheet not found: " . $this->sheetName);
@@ -170,5 +168,19 @@ class ExcelHelper
     public function getMainTableName()
     {
        return $this->tableName;
+    }
+
+    public function generateErrorReport($duplicateRowsInExcelFile, $duplicateRowsInDb) {
+        $errorReport = [];
+
+        if (!empty($duplicateRowsInExcelFile)) {
+            $errorReport['duplicates_in_excel'] = $duplicateRowsInExcelFile;
+        }
+
+        if (!empty($duplicateRowsInDb)) {
+            $errorReport['duplicates_in_db'] = $duplicateRowsInDb;
+        }
+
+        return $errorReport;
     }
 }

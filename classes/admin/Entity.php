@@ -89,10 +89,10 @@ class Entity {
     }
 
     public function addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact,  $salutation_name, $status, $module, $username) {
-        $query = 'INSERT INTO tbl_entity (entity_name, cin, incorp_date, salutation_name, status) VALUES (?, ?, ?, ?, ?)';
-        $this->logger->logQuery($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status], 'classes', $module, $username);
+        $query = 'INSERT INTO tbl_entity (entity_name, entity_code, cin, incorp_date, salutation_name, emp_prefix, status) VALUES (?, ?, ?, ?, ?, ?, ?)';
+        $this->logger->logQuery($query, [$entity_name, $cc_code, $cin, $incorp_date, $salutation_name, 'EMP', $status], 'classes', $module, $username);
         $logMessage = 'Entity Inserted ';
-        $entityId =  $this->conn->insert($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status], $logMessage);
+        $entityId =  $this->conn->insert($query, [$entity_name, $cc_code, $cin, $incorp_date, $salutation_name, 'EMP', $status], $logMessage);
 
         $cc_type=1; // Head-Office
 
