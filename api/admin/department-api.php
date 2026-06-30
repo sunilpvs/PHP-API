@@ -18,7 +18,7 @@ $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini');
 $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-$regExp = '/^[a-zA-Z\s]+$/';
+$regExp = '/^[a-zA-Z0-9\s]+$/';
 $departmentConfigFilePath = __DIR__ . '../../../excel-config/admin/department.ini';
 
 $method = $_SERVER['REQUEST_METHOD'];

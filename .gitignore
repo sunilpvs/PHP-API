@@ -34,3 +34,5 @@ scripts/*
 excel-files/*.csv
 excel-files/*.xlsx
 excel-files/*.ps1
+
+*.sql

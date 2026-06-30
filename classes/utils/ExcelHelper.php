@@ -4,6 +4,7 @@
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 require_once __DIR__ . '/../DbController.php';
 require_once __DIR__ . '/../../vendor/autoload.php';
@@ -17,6 +18,7 @@ class ExcelHelper
     private $tableName;
     private $module;
     private $mapping = [];
+    private $dateColumns = [];
 
     public function __construct($configFilePath)
     {
@@ -28,6 +30,7 @@ class ExcelHelper
         $this->sheetName = $this->config['sheet']['sheet-name'] ?? 'Sheet1';
         $this->tableName = $this->config['database']['table-name'] ?? null;
         $this->mapping = $this->config['excel-to-database-mapping'] ?? [];
+        $this->dateColumns = $this->config['date-columns'] ?? [];
         $this->module = $this->config['module']['name'] ?? null;
     }
 
@@ -114,6 +117,11 @@ class ExcelHelper
 
             foreach ($this->mapping as $excelColumn => $dbColumn) {
                 $data[$dbColumn] = $excelData[$excelColumn] ?? null;
+
+                // Convert Excel serial date to MySQL date format
+                if (in_array($dbColumn, $this->dateColumns)) {
+                    $data[$dbColumn] = Date::excelToDateTimeObject($data[$dbColumn])->format('Y-m-d');
+                }
             }
 
             $data['batch_id'] = $batchId;
