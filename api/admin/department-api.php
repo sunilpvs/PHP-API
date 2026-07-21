@@ -19,7 +19,7 @@ $debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($con
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
 $regExp = '/^[a-zA-Z0-9\s]+$/';
-$departmentConfigFilePath = __DIR__ . '../../../excel-config/admin/department.ini';
+$departmentConfigFilePath = $_SERVER['DOCUMENT_ROOT'] . '/excel-config/admin/department.ini';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
