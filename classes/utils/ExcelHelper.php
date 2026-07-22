@@ -19,6 +19,7 @@ class ExcelHelper
     private $module;
     private $mapping = [];
     private $dateColumns = [];
+    private $otherDbColumns = [];
 
     public function __construct($configFilePath)
     {
@@ -32,6 +33,7 @@ class ExcelHelper
         $this->mapping = $this->config['excel-to-database-mapping'] ?? [];
         $this->dateColumns = $this->config['date-columns'] ?? [];
         $this->module = $this->config['module']['name'] ?? null;
+        $this->otherDbColumns = $this->config['other-db-columns'] ?? [];
     }
 
     // table creation function - create a temporary table with the columns 
@@ -49,6 +51,13 @@ class ExcelHelper
         foreach ($this->mapping as $excelColumn => $dbColumn) {
             $columns[] = "`$dbColumn` VARCHAR(255)";
         }
+        // add the other db columns to the temporary table
+        if (!empty($this->otherDbColumns)) {
+            foreach ($this->otherDbColumns as $dbColumn) {
+                $columns[] = "`$dbColumn` VARCHAR(255)";
+            }
+        }
+
         $columnsSql = implode(", ", $columns);
         $tempTableName = "tbl_tmp_" . strtolower($this->module);
         $query = "CREATE TABLE IF NOT EXISTS `$tempTableName` ($columnsSql)";
@@ -118,9 +127,8 @@ class ExcelHelper
             foreach ($this->mapping as $excelColumn => $dbColumn) {
                 $data[$dbColumn] = $excelData[$excelColumn] ?? null;
 
-                // Convert Excel serial date to MySQL date format
-                if (in_array($dbColumn, $this->dateColumns)) {
-                    $data[$dbColumn] = Date::excelToDateTimeObject($data[$dbColumn])->format('Y-m-d');
+                if (in_array($dbColumn, array_values($this->dateColumns), true)) {
+                    $data[$dbColumn] = $this->parseDateValue($data[$dbColumn]);
                 }
             }
 
@@ -176,6 +184,51 @@ class ExcelHelper
     public function getMainTableName()
     {
        return $this->tableName;
+    }
+
+    private function parseDateValue($value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        if (is_numeric($raw)) {
+            try {
+                return Date::excelToDateTimeObject((float) $raw)->format('Y-m-d');
+            } catch (\Exception $e) {
+                return $raw;
+            }
+        }
+
+        $formats = [
+            'Y-m-d',
+            'Y/m/d',
+            'd-m-Y',
+            'd/m/Y',
+            'm-d-Y',
+            'm/d/Y',
+            'n-j-Y',
+            'j-n-Y',
+        ];
+
+        foreach ($formats as $format) {
+            $dt = \DateTime::createFromFormat($format, $raw);
+            $errors = \DateTime::getLastErrors();
+            if ($dt && (!$errors || ($errors['warning_count'] === 0 && $errors['error_count'] === 0))) {
+                return $dt->format('Y-m-d');
+            }
+        }
+
+        return $raw;
     }
 
     public function generateErrorReport($duplicateRowsInExcelFile, $duplicateRowsInDb) {

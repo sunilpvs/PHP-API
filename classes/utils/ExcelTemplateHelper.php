@@ -17,6 +17,9 @@ class ExcelTemplateHelper
     private $templateFileName;
     private $templateColumns = [];
     private $columnQueryMapping = [];
+    private $prefillQuery = null;
+    private $columnSource = [];
+
 
     public function __construct($configFilePath)
     {
@@ -30,6 +33,8 @@ class ExcelTemplateHelper
         $this->templateColumns = $this->config['template-columns'] ?? [];
         $this->columnQueryMapping = $this->config['column-query-mapping'] ?? [];
         $this->module = $this->config['module']['name'] ?? null;
+        $this->prefillQuery = $this->config['prefill-query']['query'] ?? null;
+        $this->columnSource = $this->config['column-source'] ?? [];
     }
 
     // function to generate an excel file with the columns
@@ -54,6 +59,48 @@ class ExcelTemplateHelper
         }
 
         // Hidden lookup sheet
+        // Prefill data
+        $prefillRows = [];
+
+        if (!empty($this->prefillQuery)) {
+            $prefillRows = $this->conn->runQuery($this->prefillQuery);
+        }
+
+        $currentRow = 2;
+
+        foreach ($prefillRows as $row) {
+
+            foreach ($this->templateColumns as $index => $columnName) {
+
+                $excelColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($index + 1);
+
+                $source = strtolower($this->columnSource[$columnName] ?? 'blank');
+
+                switch ($source) {
+
+                    case 'prefill':
+                        $sheet->setCellValue(
+                            $excelColumn . $currentRow,
+                            $row[$columnName] ?? ''
+                        );
+                        break;
+
+                    case 'zero':
+                        $sheet->setCellValue(
+                            $excelColumn . $currentRow,
+                            0
+                        );
+                        break;
+
+                    case 'blank':
+                    default:
+                        // Leave empty
+                        break;
+                }
+            }
+
+            $currentRow++;
+        }
         $lookupSheet = $spreadsheet->createSheet();
         $lookupSheet->setTitle("LOOKUPS");
         $lookupSheet->setSheetState(
@@ -72,7 +119,7 @@ class ExcelTemplateHelper
             $lookupRow = 1;
 
             foreach ($rows as $row) {
-                
+
                 $value = reset($row);
 
                 $lookupSheet->setCellValue(
@@ -113,7 +160,10 @@ class ExcelTemplateHelper
                 $validation->setFormula1($range);
 
                 // Copy validation for first 1000 rows
-                for ($i = 3; $i <= 1000; $i++) {
+                // Apply validation to all populated rows (minimum 1000 rows)
+                $totalRows = max(count($prefillRows), 999);
+
+                for ($i = 3; $i <= ($totalRows + 1); $i++) {
 
                     $sheet->getCell($excelColumn . $i)
                         ->setDataValidation(clone $validation);

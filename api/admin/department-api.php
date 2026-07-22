@@ -112,9 +112,17 @@ switch ($method) {
             break;
         }
 
-        if (!isset($input['name']) || empty(trim($input['name']))) {
+        if (!isset($input['unit']) || empty(trim($input['unit']))) {
             http_response_code(400);
-            $error = ["error" => "Department name is required"];
+            $error = ["error" => "Department unit is required"];
+            echo json_encode($error);
+            $logger->logRequestAndResponse($input, $error);
+            break;
+        }
+
+        if (!isset($input['department']) || empty(trim($input['department']))) {
+            http_response_code(400);
+            $error = ["error" => "Department field is required"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
@@ -136,21 +144,31 @@ switch ($method) {
             break;
         }
 
-        $name = trim($input['name']);
+        $unit = trim($input['unit']);
+        $department = trim($input['department']);
         $code = trim($input['code']);
         $status = intval($input['status']);
 
         // Validate name and code - only alphabets and spaces for name, code can be alphanumeric + underscore
-        if (!preg_match($regExp, $name)) {
+        if (!preg_match($regExp, $unit)) {
             http_response_code(400);
-            $error = ["error" => "Department name must contain only alphabets and spaces"];
+            $error = ["error" => "Unit must contain only alphabets and spaces"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
         }
+
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $department)) {
+            http_response_code(400);
+            $error = ["error" => "Department must contain only alphanumeric characters and underscores"];
+            echo json_encode($error);
+            $logger->logRequestAndResponse($input, $error);
+            break;
+        }
+
         if (!preg_match('/^[a-zA-Z0-9_]+$/', $code)) {
             http_response_code(400);
-            $error = ["error" => "Department code must contain only alphanumeric characters and underscores"];
+            $error = ["error" => "Code must contain only alphanumeric characters and underscores"];
             echo json_encode($error);
             $logger->logRequestAndResponse($input, $error);
             break;
@@ -166,7 +184,7 @@ switch ($method) {
         //     break;
         // }
 
-        $result = $departmentOb->insertDepartment($name, $code, $status, $module, $username);
+        $result = $departmentOb->insertDepartment($unit, $department, $code, $status, $module, $username);
 
         if ($result) {
             http_response_code(201);
@@ -192,9 +210,17 @@ switch ($method) {
             break;
         }
 
-        if (!isset($input['name']) || empty(trim($input['name']))) {
+        if (!isset($input['unit']) || empty(trim($input['unit']))) {
             http_response_code(400);
-            $error = ["error" => "Department name is required"];
+            $error = ["error" => "Department unit is required"];
+            echo json_encode($error);
+            $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
+            break;
+        }
+
+        if (!isset($input['department']) || empty(trim($input['department']))) {
+            http_response_code(400);
+            $error = ["error" => "Department field is required"];
             echo json_encode($error);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
             break;
@@ -217,20 +243,21 @@ switch ($method) {
         }
 
         $id = intval($_GET['id']);
-        $name = trim($input['name']);
+        $unit = trim($input['unit']);
+        $department = trim($input['department']);
         $code = trim($input['code']);
         $status = intval($input['status']);
 
-        if (!preg_match($regExp, $name)) {
+        if (!preg_match($regExp, $unit)) {
             http_response_code(400);
-            $error = ["error" => "Department name must contain only alphabets and spaces"];
+            $error = ["error" => "Unit must contain only alphabets and spaces"];
             echo json_encode($error);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
             break;
         }
         if (!preg_match('/^[a-zA-Z0-9_]+$/', $code)) {
             http_response_code(400);
-            $error = ["error" => "Department code must contain only alphanumeric characters and underscores"];
+            $error = ["error" => "Code must contain only alphanumeric characters and underscores"];
             echo json_encode($error);
             $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
             break;
@@ -246,7 +273,7 @@ switch ($method) {
         //     break;
         // }
 
-        $result = $departmentOb->updateDepartment($id, $name, $code, $status, $module, $username);
+        $result = $departmentOb->updateDepartment($id, $unit, $department, $code, $status, $module, $username);
 
         if ($result > 0) {
             http_response_code(200);

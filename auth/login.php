@@ -1,4 +1,6 @@
 <?php
+// This file is only for login using username and password.
+// For Microsoft SSO login, use auth/callback.php
 // Set timezone to UTC for consistent JWT expiry handling
 date_default_timezone_set('UTC');
 

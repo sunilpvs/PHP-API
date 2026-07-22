@@ -9,10 +9,10 @@ class LookupCache {
     private $entities = [];
     private $statuses = [];
     private $locations = [];
-    private $states = [];
-    private $countries = [];
     private $contactTypes = [];
-
+    private $employeesByOldEmployeeCodeMap = [];
+    private $employeesByEmpCodeMap = [];
+    
     public function __construct($conn, $logger) {
         $this->conn = $conn;
         $this->logger = $logger;
@@ -25,6 +25,8 @@ class LookupCache {
         $this->loadStatuses();
         $this->loadLocations();
         $this->loadContactTypes();
+        $this->loadEmployeesByOldEmployeeCode();
+        $this->loadEmployeesByEmpCode();
     }
 
     private function normalizeKey($value) {
@@ -131,6 +133,32 @@ class LookupCache {
         }
     }
 
+    private function loadEmployeesByOldEmployeeCode() {
+        $query = 'SELECT id, old_emp_code FROM tbl_employee';
+        $this->logger->logQuery($query, [], 'classes', 'lookup-cache');
+        $rows = $this->conn->runQuery($query);
+        $this->employeesByOldEmployeeCodeMap = [];
+        foreach ($rows as $row) {
+            $this->employeesByOldEmployeeCodeMap[$this->normalizeKey($row['old_emp_code'])] = [
+                'id' => (int)$row['id'],
+                'old_emp_code' => $row['old_emp_code'],
+            ];
+        }
+    }
+    
+    private function loadEmployeesByEmpCode() {
+        $query = 'SELECT id, emp_code FROM tbl_employee';
+        $this->logger->logQuery($query, [], 'classes', 'lookup-cache');
+        $rows = $this->conn->runQuery($query);
+        $this->employeesByEmpCodeMap = [];
+        foreach ($rows as $row) {
+            $this->employeesByEmpCodeMap[$this->normalizeKey($row['emp_code'])] = [
+                'id' => (int)$row['id'],
+                'emp_code' => $row['emp_code'],
+            ];
+        }
+    }
+
     public function getDepartmentId($name) {
         $key = $this->normalizeKey($name);
         return isset($this->departments[$key]) ? $this->departments[$key]['id'] : null;
@@ -169,5 +197,15 @@ class LookupCache {
     public function getContactTypeId($name) {
         $key = $this->normalizeKey($name);
         return isset($this->contactTypes[$key]) ? $this->contactTypes[$key]['id'] : null;
+    }
+
+    public function getEmployeeIdByOldEmployeeCode($oldEmployeeCode) {
+        $key = $this->normalizeKey($oldEmployeeCode);
+        return isset($this->employeesByOldEmployeeCodeMap[$key]) ? $this->employeesByOldEmployeeCodeMap[$key]['id'] : null;
+    }
+
+    public function getEmployeeIdByEmpCode($empCode) {
+        $key = $this->normalizeKey($empCode);
+        return isset($this->employeesByEmpCodeMap[$key]) ? $this->employeesByEmpCodeMap[$key]['id'] : null;
     }
 }
