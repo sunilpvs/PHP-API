@@ -67,6 +67,20 @@ switch ($method) {
             break;
         }
 
+        if (isset($_GET['check-email-exists'])) {
+            $email = $_GET['check-email-exists'];
+            $employee = $employeeOb->checkM365UserExists($email, $module, $username);
+            if ($employee == null) {
+                http_response_code(200);
+                echo json_encode(['exists' => false]);
+            }
+            else {
+                http_response_code(200);
+                echo json_encode(['exists' => true]);
+            }
+            break;
+        }
+
         // paginated employees response
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
@@ -103,15 +117,18 @@ switch ($method) {
         }
 
         // form data for employee import - use addEmployeeRecordForManualImport function
+        // removed email, contacttype(auto set based on employee)
+        // if m365 is true, then email and personal email are different
+        // if m365 is false, then email and personal email are same
+       
         if (
-            isset($input['f_name']) && isset($input['l_name']) && isset($input['dob']) && isset($input['email']) && isset($input['mobile']) &&
-            isset($input['city']) && isset($input['state']) && isset($input['pin']) && isset($input['country']) && isset($input['add1']) && isset($input['add2']) &&
-            isset($input['personal_email']) && isset($input['contacttype_id']) && isset($input['join_date']) && isset($input['exit_date']) &&
+            isset($input['f_name']) && isset($input['l_name']) && isset($input['dob']) && isset($input['mobile']) && isset($input['email']) &&
+            isset($input['city']) && isset($input['state']) && array_key_exists('pin', $input) && isset($input['country']) && array_key_exists('add1', $input) && array_key_exists('add2', $input) &&
+            isset($input['personal_email']) && isset($input['join_date']) && isset($input['emp_type']) &&
             isset($input['emp_status']) && isset($input['entity_id']) && isset($input['department_id']) &&
-            isset($input['designation_id']) && isset($input['image']) && isset($input['uan']) && isset($input['aadhar']) &&
+            isset($input['designation_id']) && array_key_exists('image', $input) && isset($input['uan']) && isset($input['aadhar']) &&
             isset($input['pan_no']) && isset($input['esi_no']) && isset($input['bank_name']) && isset($input['bank_account_no']) &&
-            isset($input['ifsc_code']) && isset($input['m365']) && isset($input['old_emp_code']) && isset($input['created_by']) &&
-            isset($input['module']) && isset($input['username'])
+            isset($input['ifsc_code']) && isset($input['m365']) && isset($input['old_emp_code'])
         ) {
             $f_name = trim($input['f_name']);
             $l_name = trim($input['l_name']);
@@ -125,9 +142,10 @@ switch ($method) {
             $state = intval(trim($input['state']));
             $pin = trim($input['pin']) ?? null;
             $country = intval(trim($input['country']));
-            $contacttype_id = intval(trim($input['contacttype_id']));
             $join_date = trim($input['join_date']);
-            $exit_date = trim($input['exit_date']);
+            $exit_date = isset($input['exit_date']) ? trim((string) $input['exit_date']) : null;
+            $emp_type = $input['emp_type'];
+            // domain name is in the entity table, so no need to pass it here, we can get it from the entity id
             $emp_status = intval(trim($input['emp_status']));
             $entity_id = intval(trim($input['entity_id']));
             $department_id = intval(trim($input['department_id']));
@@ -142,8 +160,56 @@ switch ($method) {
             $ifsc_code = trim($input['ifsc_code']);
             $m365 = trim($input['m365']);
             $old_emp_code = trim($input['old_emp_code']);
-            $module = trim($input['module']);
-            $username = trim($input['username']);
+            // $module = trim($input['module']);
+            // $username = trim($input['username']);
+
+            // check duplicate employee record based on email and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByEmail($email, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this email already exists for the given entity."]);
+                break;
+            }
+            // check duplicate employee record based on personal email and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByPersonalEmail($personal_email, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this personal email already exists for the given entity."]);
+                break;
+            }
+
+            // check duplicate employee record based on aadhar and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByAadhar($aadhar, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this Aadhar number already exists for the given entity."]);
+                break;
+            }
+
+            // check duplicate employee record based on pan_no and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByPan($pan_no, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this PAN number already exists for the given entity."]);
+                break;
+            }
+
+            // check duplicate employee record based on mobile and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByMobile($mobile, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this mobile number already exists for the given entity."]);
+                break;
+            }
+
+            // check duplicate employee record based on uan and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByUAN($uan, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this UAN number already exists for the given entity."]);
+                break;
+            }
+
+            // check duplicate employee record based on bank_account_no and entity_id
+            if ($employeeOb->checkDuplicateEmployeeByBankAccount($bank_account_no, $entity_id)) {
+                http_response_code(400);
+                echo json_encode(["error" => "Employee with this bank account number already exists for the given entity."]);
+                break;
+            }
 
             $employee = $employeeOb->addEmployeeRecordForManualImport(
                 $f_name,
@@ -156,11 +222,11 @@ switch ($method) {
                 $add2,
                 $city,
                 $state,
-                $pin,
                 $country,
-                $contacttype_id,
+                $pin,
                 $join_date,
                 $exit_date,
+                $emp_type,
                 $emp_status,
                 $entity_id,
                 $department_id,
@@ -179,8 +245,13 @@ switch ($method) {
                 $module,
                 $username
             );
+            if (is_array($employee) && isset($employee['error'])) {
+                http_response_code(400);
+                echo json_encode(['error' => $employee['error']]);
+                break;
+            }
             http_response_code(200);
-            echo json_encode(['employee' => $employee]);
+            echo json_encode(['message' => 'Employee record added successfully']);
             break;
         }
         http_response_code(400);

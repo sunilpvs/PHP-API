@@ -2,6 +2,8 @@
 require_once __DIR__. '/../DbController.php';
 require_once __DIR__. '/../Logger.php';
 
+// domain_name is added in the entity table.
+
 class Entity {
     private $conn;
     private $logger;
@@ -18,6 +20,7 @@ class Entity {
         $query = 'SELECT 
                         e.id,
                         e.entity_name,
+                        e.domain_name,
                         e.cin,
                         e.incorp_date,
                         e.salutation_name as salutation,
@@ -41,6 +44,7 @@ class Entity {
         $query = "SELECT 
                         e.id,
                         e.entity_name,
+                        e.domain_name,
                         e.cin,
                         e.incorp_date,
                         e.salutation_name as salutation,
@@ -70,6 +74,7 @@ class Entity {
         $query = 'SELECT 
                         e.id,
                         e.entity_name,
+                        e.domain_name,
                         e.cin,
                         e.incorp_date,
                         e.salutation_name as salutation,
@@ -88,11 +93,17 @@ class Entity {
         return $this->conn->runQuery($query);
     }
 
-    public function addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact,  $salutation_name, $status, $module, $username) {
-        $query = 'INSERT INTO tbl_entity (entity_name, entity_code, cin, incorp_date, salutation_name, emp_prefix, status) VALUES (?, ?, ?, ?, ?, ?, ?)';
-        $this->logger->logQuery($query, [$entity_name, $cc_code, $cin, $incorp_date, $salutation_name, 'EMP', $status], 'classes', $module, $username);
+    public function getDomainNameCombo($module, $username) {
+        $query = 'SELECT DISTINCT domain_name FROM tbl_entity ORDER BY domain_name ASC';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        return $this->conn->runQuery($query);
+    }
+
+    public function addEntity($entity_name, $domain_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact,  $salutation_name, $status, $module, $username) {
+        $query = 'INSERT INTO tbl_entity (entity_name, domain_name, entity_code, cin, incorp_date, salutation_name, emp_prefix, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+        $this->logger->logQuery($query, [$entity_name, $domain_name, $cc_code, $cin, $incorp_date, $salutation_name, 'EMP', $status], 'classes', $module, $username);
         $logMessage = 'Entity Inserted ';
-        $entityId =  $this->conn->insert($query, [$entity_name, $cc_code, $cin, $incorp_date, $salutation_name, 'EMP', $status], $logMessage);
+        $entityId =  $this->conn->insert($query, [$entity_name, $domain_name, $cc_code, $cin, $incorp_date, $salutation_name, 'EMP', $status], $logMessage);
 
         $cc_type=1; // Head-Office
 
@@ -109,11 +120,11 @@ class Entity {
         return false;
     }
 
-    public function updateEntity($entity_name, $cin, $incorp_date, $salutation_name, $status, $id, $module, $username) {
-        $query = 'UPDATE tbl_entity SET entity_name = ?, cin = ?, incorp_date = ?, salutation_name = ?, status = ? WHERE id = ?';
-        $this->logger->logQuery($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status, $id], 'classes', $module, $username);
+    public function updateEntity($entity_name, $domain_name, $cin, $incorp_date, $salutation_name, $status, $id, $module, $username) {
+        $query = 'UPDATE tbl_entity SET entity_name = ?, domain_name = ?, cin = ?, incorp_date = ?, salutation_name = ?, status = ? WHERE id = ?';
+        $this->logger->logQuery($query, [$entity_name, $domain_name, $cin, $incorp_date, $salutation_name, $status, $id], 'classes', $module, $username);
         $logMessage = 'Entity Updated ';
-        return $this->conn->update($query, [$entity_name, $cin, $incorp_date, $salutation_name, $status, $id], $logMessage);
+        return $this->conn->update($query, [$entity_name, $domain_name, $cin, $incorp_date, $salutation_name, $status, $id], $logMessage);
     }
 
     public function deleteEntity($id, $module, $username) {
@@ -163,5 +174,21 @@ class Entity {
         $result = $this->conn->runSingle($query, [$entity_id]);
         return $result ? $result['salutation_name'] : null;
     }
+
+    public function checkDuplicateDomainName($domain_name) {
+        $query = 'SELECT 1 FROM tbl_entity WHERE lower(trim(domain_name)) = lower(trim(?))';
+        $this->logger->logQuery($query, [$domain_name], 'classes');
+        $duplicate = $this->conn->runSingle($query, [$domain_name]);
+        return !empty($duplicate);
+    }
+
+    public function checkEditDuplicateDomainName($domain_name, $id) {
+        $query = 'SELECT 1 FROM tbl_entity WHERE lower(trim(domain_name)) = lower(trim(?)) AND id != ?';
+        $this->logger->logQuery($query, [$domain_name, $id], 'classes');
+        $duplicate = $this->conn->runSingle($query, [$domain_name, $id]);
+        return !empty($duplicate);
+    }
+
+    
 }
 ?>

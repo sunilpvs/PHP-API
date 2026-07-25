@@ -68,6 +68,17 @@ switch ($method) {
             break;
         }
 
+        // dropdown for domain name
+        // if the type is combo, and fileds are domain_name then return domain_name list for dropdowns
+        if (isset($_GET['type']) && $_GET['type'] === 'combo' && isset($_GET['fields']) 
+                && $_GET['fields'] === 'domain_name') {
+            $data = $entityOb->getDomainNameCombo($module, $username);
+            http_response_code(200);
+            echo json_encode(['domain_names' => $data]);
+            $logger->logRequestAndResponse($_GET, $data);
+            break;
+        }
+
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
         $offset = ($page - 1) * $limit;
@@ -102,6 +113,7 @@ switch ($method) {
 
         $entity_name = trim($input['entity_name']);
         $cc_code = trim($input['cc_code'] );
+        $domain_name = trim($input['domain_name']);
         $cin = trim($input['cin']);
         $incorp_date = trim($input['incorp_date']);
         $gst_no = trim($input['gst_no']) ;
@@ -131,8 +143,16 @@ switch ($method) {
             break;
         }
 
+        if ($entityOb->checkDuplicateDomainName($domain_name)) {
+            http_response_code(400);
+            $error = ["error" => "Duplicate Record: Domain name already exists"];
+            echo json_encode($error);
+            $logger->logRequestAndResponse($input, $error);
+            break;
+        }
 
-        $result = $entityOb->addEntity($entity_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact, $salutation_name, $status, $module, $username);
+
+        $result = $entityOb->addEntity($entity_name, $domain_name, $cc_code, $cin, $incorp_date, $gst_no, $add1, $add2, $city, $state, $country, $pin, $primary_contact, $salutation_name, $status, $module, $username);
         if ($result) {
             http_response_code(201);
             $response = ["message" => "Entity added successfully"];
@@ -170,6 +190,7 @@ switch ($method) {
         }
 
         $entity_name = trim($input['entity_name']);
+        $domain_name = trim($input['domain_name']);
         $cin = trim($input['cin']);
         $incorp_date = trim($input['incorp_date']);
         $salutation_name = trim($input['salutation_name']);
@@ -190,7 +211,15 @@ switch ($method) {
             break;
         }
 
-        $result = $entityOb->updateEntity($entity_name, $cin, $incorp_date, $salutation_name, $status, $id, $module, $username);
+        if ($entityOb->checkEditDuplicateDomainName($domain_name, $id)) {
+            http_response_code(400);
+            $error = ["error" => "Duplicate Record: Domain name already exists"];
+            echo json_encode($error);
+            $logger->logRequestAndResponse(array_merge($_GET, $input), $error);
+            break;
+        }
+
+        $result = $entityOb->updateEntity($entity_name, $domain_name, $cin, $incorp_date, $salutation_name, $status, $id, $module, $username);
         if ($result !== false) {
             http_response_code(200);
             $response = ["message" => $result > 0 ? "Entity updated successfully" : "No changes made"];

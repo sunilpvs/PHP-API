@@ -127,7 +127,7 @@ try {
                 exit();
             }
 
-            if ($vendorStatus == 11) {
+            if ($sendBackStatus == 11) {
                 http_response_code(400);
                 echo json_encode(["error" => "RFQ is already approved and cannot be sent back"]);
                 exit();
@@ -187,13 +187,13 @@ try {
                 exit();
             }
 
-            if ($vendorStatus == 7) {
+            if ($verifiedStatus == 7) {
                 http_response_code(400);
                 echo json_encode(["error" => "RFQ must be submitted before it can be verified"]);
                 exit();
             }
 
-            if ($vendorStatus == 10) {
+            if ($verifiedStatus == 10) {
                 http_response_code(400);
                 echo json_encode(["error" => "RFQ is sent back for corrections and cannot be verified until resubmitted"]);
                 exit();

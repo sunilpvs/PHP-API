@@ -115,6 +115,34 @@ class Department
         return $this->conn->runSingle($query, [$code]);
     }
 
+    public function getDepartmentCombo($module, $username){
+        
+        $query = 'SELECT 
+                    d.id, 
+                    d.name 
+                  FROM tbl_department d
+                  WHERE d.status = 1';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        return $this->conn->runQuery($query);
+    }
+
+    public function getDepartmentsByUnit($unit, $module, $username)
+    {
+        $query = 'SELECT 
+                    d.id, 
+                    d.name, 
+                    d.unit,
+                    d.department,
+                    d.code, 
+                    d.status AS status_id, 
+                    s.status AS status 
+                  FROM tbl_department d
+                  LEFT JOIN tbl_status s ON d.status = s.code
+                  WHERE d.unit = ?';
+        $this->logger->logQuery($query, [$unit], 'classes', $module, $username);
+        return $this->conn->runQuery($query, [$unit]);
+    }
+
     public function insertDepartment($unit, $department, $code, $status, $module, $username)
     {
         $name = $this->generateDepartmentName($code, $department);

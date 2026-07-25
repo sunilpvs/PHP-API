@@ -72,6 +72,25 @@ switch ($method) {
             break;
         }
 
+        if (isset($_GET['unit'])) {
+            $unit = trim($_GET['unit']);
+            $data = $departmentOb->getDepartmentsByUnit($unit, $module, $username);
+            $status = !empty($data) ? 200 : 404;
+            $response = !empty($data) ? $data : ["error" => "No departments found for the specified unit"];
+            http_response_code($status);
+            echo json_encode($response);
+            $logger->logRequestAndResponse($_GET, $response);
+            break;
+        }
+
+        if (isset($_GET['type']) && $_GET['type'] === 'combo') {
+            $data = $departmentOb->getDepartmentCombo($module, $username);
+            http_response_code(200);
+            echo json_encode($data);
+            $logger->logRequestAndResponse($_GET, $data);
+            break;
+        }
+
         // Pagination parameters
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;

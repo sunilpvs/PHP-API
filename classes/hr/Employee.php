@@ -4,6 +4,13 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/DbController.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/ExcelHelper.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/LookupCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/GraphAutoMailer.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/admin/Entity.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+
 // tbl_contact table structure
 // id	int	NO	PRI		auto_increment
 // f_name	varchar(50)	NO			
@@ -88,6 +95,36 @@ class Employee
     private $conn;
     private $logger;
     private $excelHelper;
+    private $env;
+    private $entityOb;
+
+    private static $EMP_QUERY = "SELECT 
+                                    emp.id as id,
+                                    ent.entity_name as entity_name, dept.name as department, 
+                                    desn.name as designation, cont.f_name as first_name, 
+                                    cont.l_name as last_name, 
+                                    concat(cont.f_name,' ',cont.l_name) as display_name,
+                                    cont.dob as dob, cont.personal_email as personal_email, 
+                                    cont.mobile, 
+                                    CASE WHEN cont.contacttype_id = 2 THEN 'Employee' ELSE 'Contract' END as emp_type,
+                                    cont.join_date as joining_date, cont.exit_date as exit_date, 
+                                    emp.old_emp_code as old_emp_code,
+                                    CASE WHEN emp.m365 = 1 THEN 'Yes' ELSE 'No' END as m365,
+                                    cont.email as email, CASE WHEN cont.add1 IS NULL THEN '-' ELSE cont.add1 END as add1,
+                                    CASE WHEN cont.add2 IS NULL THEN '-' ELSE cont.add2 END as add2,
+                                    country.country as country, state.state as state, city.city as city, 
+                                    cont.pin as pin,
+                                    emp.aadhar as aadhar, emp.uan as uan, emp.pan_no as pan, emp.esi_no as esi, 
+                                    emp.bank_name as bank_name, emp.bank_account_no as bank_account_no, 
+                                    emp.ifsc_code as ifsc_code
+                                    FROM tbl_employee emp
+                                    LEFT JOIN tbl_contact cont ON emp.contact_id = cont.id
+                                    JOIN tbl_entity ent on emp.entity_id = ent.id
+                                    JOIN tbl_department dept on cont.department = dept.id
+                                    JOIN tbl_designation desn on cont.designation = desn.id
+                                    JOIN tbl_country country on cont.country = country.id
+                                    JOIN tbl_state state on cont.state = state.id
+                                    JOIN tbl_city city on cont.city = city.id";
 
     public function __construct()
     {
@@ -97,6 +134,69 @@ class Employee
         $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
         $this->logger = new Logger($debugMode, $logDir);
         $this->excelHelper = new ExcelHelper($_SERVER['DOCUMENT_ROOT'] . '/excel-config/hr/employee.ini');
+        $this->entityOb = new Entity();
+
+        $this->env = getenv('APP_ENV') ?: 'local';
+        if ($this->env === 'production') {
+
+            $dotenv = Dotenv::createImmutable(__DIR__ . "/../../", ".env.prod");
+        } else {
+            $dotenv = Dotenv::createImmutable(__DIR__ . "/../../", ".env");
+        }
+        $dotenv->load();
+    }
+
+    private function normalizeEmployeeType($empType)
+    {
+        if (is_numeric($empType)) {
+            return ((int) $empType === 1) ? 'regular' : 'contract';
+        }
+
+        $normalizedEmpType = strtolower(trim((string) $empType));
+        if ($normalizedEmpType === 'regular') {
+            return 'regular';
+        }
+
+        if (in_array($normalizedEmpType, ['contract', 'non regular', 'non-regular'], true)) {
+            return 'contract';
+        }
+
+        throw new Exception('Invalid value for emp_type: ' . $empType);
+    }
+
+    private function normalizeM365Flag($m365)
+    {
+        if (is_bool($m365)) {
+            return $m365;
+        }
+
+        if (is_int($m365) || is_float($m365)) {
+            return ((int) $m365) === 1;
+        }
+
+        return in_array(strtolower(trim((string) $m365)), ['y', 'yes', '1', 'true'], true);
+    }
+
+    private function normalizeExitDate($employeeType, $exitDate)
+    {
+        $exitDate = trim((string) $exitDate);
+        if ($employeeType === 'regular') {
+            return null;
+        }
+
+        if ($exitDate === '') {
+            throw new Exception('Exit date is mandatory for contract employees');
+        }
+
+        return $exitDate;
+    }
+
+    private function ensureM365EmailIsAvailable($email, $module, $username)
+    {
+        $m365User = $this->checkM365UserExists($email, $module, $username);
+        if ($m365User) {
+            throw new Exception('Email already exists in M365.');
+        }
     }
 
     // function to get all employees with pagination
@@ -105,23 +205,24 @@ class Employee
         $limit = max(1, min(100, (int)$limit));
         $offset = max(0, (int)$offset);
 
-        $query = 'SELECT * FROM tbl_employee LIMIT ? OFFSET ?';
+        $query = self::$EMP_QUERY . " ORDER BY emp.id ASC LIMIT $limit OFFSET $offset";
         $this->logger->logQuery($query, [$limit, $offset], 'classes', $module, $username);
-        return $this->conn->runQuery($query, [$limit, $offset]);
+        return $this->conn->runQuery($query, []);
     }
 
     // function to get all employees with pagination
     public function getEmployeesCount($module, $username)
     {
-        $query = 'SELECT COUNT(*) FROM tbl_employee';
+        $query = 'SELECT COUNT(*) AS total FROM tbl_employee';
         $this->logger->logQuery($query, [], 'classes', $module, $username);
-        return $this->conn->runQuery($query);
+        $result = $this->conn->runQuery($query);
+        return $result[0]['total'] ?? 0;
     }
 
     // function to get employee by id
     public function getEmployeeById($id, $module, $username)
     {
-        $query = 'SELECT * FROM tbl_employee WHERE id = ?';
+        $query = self::$EMP_QUERY . " WHERE emp.id = ?";
         $this->logger->logQuery($query, [$id], 'classes', $module, $username);
         return $this->conn->runQuery($query, [$id]);
     }
@@ -129,10 +230,12 @@ class Employee
     // function to get employee by email
     public function getEmployeeByEmail($email, $module, $username)
     {
-        $query = 'SELECT * FROM tbl_employee WHERE email = ?';
+        $query = self::$EMP_QUERY . " WHERE emp.email = ?";
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         return $this->conn->runQuery($query, [$email]);
     }
+
+
 
     // function to add an employee
     // adding an employee contains multiple steps
@@ -174,7 +277,6 @@ class Employee
         $module,
         $username
     ) {
-        $transactionStarted = false;
         try {
             // validate the data before adding to the tbl_contact table
             $f_name = trim($f_name);
@@ -221,9 +323,9 @@ class Employee
         $stateId,
         $countryId,
         $pin,
-        $contactTypeId,
         $join_date,
         $exit_date,
+        $empType,
         $statusId,
         $entityId,
         $departmentId,
@@ -242,13 +344,28 @@ class Employee
         $module,
         $username
     ) {
-        $transactionStarted = false;
         try {
             $f_name = trim($f_name);
             $l_name = trim($l_name);
+            $empType = $this->normalizeEmployeeType($empType);
+            $m365 = $this->normalizeM365Flag($m365);
+            $exit_date = $this->normalizeExitDate($empType, $exit_date);
 
-            $this->conn->beginTrans();
-            $transactionStarted = true;
+            if ($m365) {
+                if (strtolower(trim((string) $email)) === strtolower(trim((string) $personal_email))) {
+                    throw new Exception('Personal email must be different from email when m365 is enabled');
+                }
+
+                $this->ensureM365EmailIsAvailable($email, $module, $username);
+            } else {
+                $personal_email = $email;
+            }
+            if ($empType === 'regular') {
+                $contactTypeId = 2; // Employee
+            } else {
+                $contactTypeId = 3; // Consultant
+            }
+
 
             // Pass everything as IDs, just like Excel import
             $contactId = $this->addContact(
@@ -312,14 +429,43 @@ class Employee
                 throw new Exception('Employee not added');
             }
 
-            $this->conn->commitTrans();
+            $salutationName = $this->entityOb->getSalutationNameByEntityId($entityId, $module, $username);
+            $empCode = $this->getEmployeeCodeById($employeeId, $module, $username);
+
+            // send a mail to IT admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
+            $mailer = new AutoMail();
+            $itAdminEmails = $this->getItAdminEmails('hr', 'system');
+            // $hrEmail = $this->getHrEmailByEntityId($entityId, $module, $username);
+            if ($m365) {
+                $name = $salutationName ? $salutationName : 'Shrichandra Group Team';
+                $keyValueData = [
+                    "Message" => "A new employee record has been added for $f_name $l_name. Please create an M365 account for this employee. Refer Admin Portal for more details.",
+                    "Employee Name" => $f_name . ' ' . $l_name,
+                    "Employee Email" => $email,
+                    "Employee Code" => $empCode,
+                    // get it admin portal url from the env file
+                    "IT Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
+                ];
+                $emailSent = $mailer->sendInfoEmail(
+                    subject: "New Employee Record Added - M365 Account Creation Required",
+                    greetings: "Dear IT Admin,",
+                    name: $salutationName ? $salutationName : 'Shrichandra Group Team',
+                    keyValueArray: $keyValueData,
+                    to: $itAdminEmails,
+                    cc: [], // add hr mail
+                    bcc: $itAdminEmails,
+                );
+
+                if (!$emailSent) {
+                    throw new Exception('Failed to send email to IT Admin for M365 account creation');
+                }
+            }
+
+            // $this->conn->commitTrans();
             return true;
         } catch (Exception $e) {
-            if ($transactionStarted) {
-                $this->conn->rollbackTrans();
-            }
             $this->logger->log('Failed to add employee record: ' . $e->getMessage(), 'classes', $module);
-            return ['error' => 'Failed to add employee record: ' . $e->getMessage()];
+            return ['exception' => 'Failed to add employee record:', 'error' => $e->getMessage()];
         }
     }
 
@@ -346,11 +492,10 @@ class Employee
         foreach ($rows as $row) {
             if (strtolower(trim($row['m365'])) === 'y' || strtolower(trim($row['m365'])) === 'yes') {
                 $result = $this->checkM365UserExists($row['email'], $module, $username);
-                // if the email is not found in the tbl_m365_users table, then add the error to the duplicateRowsInExcelFile array and continue to the next row because the email is invalid and we cannot proceed with the import
-                if ($result === null) {
+                if ($result !== null) {
                     $duplicateRowsInExcelFile[] = [
                         'row_number' => $rowNumber,
-                        'Error' => "Row has invalid email. Email not found in M365.",
+                        'Error' => "Row has duplicate email. Email already exists in M365.",
                         'data' => [
                             'email' => $row['email'],
                         ]
@@ -358,9 +503,6 @@ class Employee
                     $rowNumber++;
                     continue;
                 }
-                $row['f_name'] = $result['first_name'];
-                $row['l_name'] = $result['last_name'];
-                // create a new email with the format of the email in the tbl_m365_users table
                 $key = strtolower($row['email']) . '_' . strtolower($row['entity_code']);
             } else {
                 $key = strtolower($row['old_emp_code']) . '_' . strtolower($row['entity_code']);
@@ -393,7 +535,7 @@ class Employee
         }
 
         // check cleaned rows for email against tbl_m365_users table if m365 is Y, y, Yes, yes
-     
+
         $duplicateRowsInDb = [];
 
         // Existing M365 employees
@@ -671,9 +813,10 @@ class Employee
         if ($result) {
             return $result['id'];
         }
+
         // if the employee does not exist, add it
         $emp_code = $this->generateEmployeeCode($entity_id, $module, $username);
-        $query = 'INSERT INTO tbl_employee (emp_code, entity_id, 
+        $query = 'INSERT INTO tbl_employee (emp_code, entity_id,
             contact_id, user_id, emp_status, 
             uan, aadhar, pan_no, esi_no, bank_name, 
             bank_account_no, ifsc_code, 
@@ -748,5 +891,105 @@ class Employee
             return $result;
         }
         return null;
+    }
+
+    public function getEmployeeCodeById($employeeId, $module, $username)
+    {
+        $query = 'SELECT emp_code FROM tbl_employee WHERE id = ?';
+        $this->logger->logQuery($query, [$employeeId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$employeeId]);
+        if ($result) {
+            return $result['emp_code'];
+        }
+        return null;
+    }
+
+    public function getItAdminEmails($module, $username)
+    {
+        $query = 'SELECT email FROM tbl_user_modules WHERE user_role_id = 2 AND module_id = 1';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        $result = $this->conn->runQuery($query);
+        if ($result) {
+            return array_column($result, 'email');
+        }
+        return [];
+    }
+
+    // duplilcate check helper functions
+    public function checkDuplicateEmployeeByEmail($email, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp JOIN tbl_contact cont ON emp.contact_id = cont.id WHERE cont.email = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$email, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$email, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
+    }
+
+    public function checkDuplicateEmployeeByPersonalEmail($personal_email, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp JOIN tbl_contact cont ON emp.contact_id = cont.id WHERE cont.personal_email = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$personal_email, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$personal_email, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
+    }
+
+    public function checkDuplicateEmployeeByAadhar($aadhar, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp WHERE emp.aadhar = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$aadhar, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$aadhar, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
+    }
+
+    public function checkDuplicateEmployeeByPan($pan_no, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp WHERE emp.pan_no = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$pan_no, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$pan_no, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
+    }
+
+    public function checkDuplicateEmployeeByMobile($mobile, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp JOIN tbl_contact cont ON emp.contact_id = cont.id WHERE cont.mobile = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$mobile, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$mobile, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
+    }
+
+    public function checkDuplicateEmployeeByUAN($uan, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp WHERE emp.uan = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$uan, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$uan, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
+    }
+
+    public function checkDuplicateEmployeeByBankAccount($bank_account_no, $entity_id)
+    {
+        $query = 'SELECT 1 FROM tbl_employee emp WHERE emp.bank_account_no = ? AND emp.entity_id = ?';
+        $this->logger->logQuery($query, [$bank_account_no, $entity_id], 'classes', 'system', 'system');
+        $result = $this->conn->runSingle($query, [$bank_account_no, $entity_id]);
+        if ($result) {
+            return true;
+        }
+        return false;
     }
 }
