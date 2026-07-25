@@ -28,7 +28,7 @@ $input = is_array($input) ? $input : [];
 $regExp = '/^[a-zA-Z0-9\s]+$/';
 
 $employeeOb = new Employee();
-$employeeConfigFilePath = __DIR__ . '../../../excel-config/hr/employee.ini';
+$employeeConfigFilePath = $_SERVER['DOCUMENT_ROOT'] . '/excel-config/hr/employee.ini';
 $excelHelper = new ExcelHelper($employeeConfigFilePath);
 $excelTemplateHelper = new ExcelTemplateHelper($employeeConfigFilePath);
 $auth = new UserLogin();
