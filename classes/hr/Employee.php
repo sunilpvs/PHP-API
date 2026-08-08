@@ -256,6 +256,7 @@ class Employee
         $stateId,
         $countryId,
         $pin,
+        $officeLocationId,
         $contactTypeId,
         $join_date,
         $exit_date,
@@ -294,7 +295,7 @@ class Employee
             if (!$userModuleId) {
                 throw new Exception('User module not added as Base Employee');
             }
-            $employeeId = $this->addEmployee($entityId, $contactId, $userId, $statusId, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $old_emp_code, $userId, $module, $username);
+            $employeeId = $this->addEmployee($entityId, $contactId, $userId, $statusId, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username);
             if (!$employeeId) {
                 throw new Exception('Employee not added');
             }
@@ -339,6 +340,7 @@ class Employee
         $bank_account_no,
         $ifsc_code,
         $m365,
+        $officeLocationId,
         $old_emp_code,
         $userId,
         $module,
@@ -420,6 +422,7 @@ class Employee
                 $bank_account_no,
                 $ifsc_code,
                 $m365,
+                $officeLocationId,
                 $old_emp_code,
                 $userId,
                 $module,
@@ -469,6 +472,7 @@ class Employee
         }
     }
 
+    // TODO: add office location column
     public function importDataFromExcel($batchId, $module, $username)
     {
         $rows = $this->excelHelper->selectTemporaryTableRows($batchId);
@@ -660,6 +664,9 @@ class Employee
             $row['add1'] = $row['add1'] ?? null;
             $row['add2'] = $row['add2'] ?? null;
 
+            // TODO: get office location id
+            $officeLocationId = 1;
+
             // insert the data using the addEmployeeRecordForExcelImport function
             $this->addEmployeeRecordForExcelImport(
                 $row['f_name'],
@@ -690,6 +697,7 @@ class Employee
                 $row['bank_account_no'],
                 $row['ifsc_code'],
                 $m365,
+                $officeLocationId,
                 $row['old_emp_code'],
                 $username,
                 $module,
@@ -802,7 +810,7 @@ class Employee
         return $userModuleId;
     }
 
-    public function addEmployee($entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $old_emp_code, $userId, $module, $username)
+    public function addEmployee($entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username)
     {
 
         $m365 = ($m365 === true || $m365 === 1 || in_array(strtolower(trim((string)$m365)), ['y', 'yes', '1', 'true'], true)) ? 1 : 0;
@@ -814,15 +822,17 @@ class Employee
             return $result['id'];
         }
 
+        $officeLocationId = $officeLocationId ?: 1; // default to 1 if not provided
+
         // if the employee does not exist, add it
         $emp_code = $this->generateEmployeeCode($entity_id, $module, $username);
         $query = 'INSERT INTO tbl_employee (emp_code, entity_id,
             contact_id, user_id, emp_status, 
             uan, aadhar, pan_no, esi_no, bank_name, 
             bank_account_no, ifsc_code, 
-            m365, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $old_emp_code, $userId], 'classes', $module, $username);
-        $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $old_emp_code, $userId], 'Employee added');
+            m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'classes', $module, $username);
+        $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'Employee added');
         return $employeeId;
     }
 

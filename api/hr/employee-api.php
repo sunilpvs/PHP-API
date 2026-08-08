@@ -211,6 +211,8 @@ switch ($method) {
                 break;
             }
 
+            $officeLocationId = isset($input['office_location_id']) ? intval(trim($input['office_location_id'])) : null;
+
             $employee = $employeeOb->addEmployeeRecordForManualImport(
                 $f_name,
                 $l_name,
@@ -240,6 +242,7 @@ switch ($method) {
                 $bank_account_no,
                 $ifsc_code,
                 $m365,
+                $officeLocationId,
                 $old_emp_code,
                 $username,
                 $module,
