@@ -9,22 +9,24 @@ set_time_limit(0);
 const DEFAULT_USERS_CSV = __DIR__ . '/LicensedUsers.csv';
 const DEFAULT_LICENSES_CSV = __DIR__ . '/Licenses.csv';
 const APP_INI_PATH = __DIR__ . '/../app.ini';
+const ENTITY = 'SCG';
 
 $argvValues = $_SERVER['argv'] ?? [];
 $usersCsvPath = resolveCsvPath($argvValues[1] ?? getenv('M365_USERS_CSV') ?? null, DEFAULT_USERS_CSV);
 $licensesCsvPath = resolveCsvPath($argvValues[2] ?? getenv('M365_LICENSES_CSV') ?? null, DEFAULT_LICENSES_CSV);
+$entity = $argvValues[3] ?? getenv('M365_ENTITY') ?? ENTITY;
 
 try {
 	$connection = createConnection(APP_INI_PATH);
 	$users = readCsvAsRows($usersCsvPath);
 	$licenses = readCsvAsRows($licensesCsvPath);
 
-	truncateTables($connection, ['tbl_m365_licenses', 'tbl_m365_users']);
-
 	$connection->beginTransaction();
 	try {
-		importUsers($connection, $users);
-		importLicenses($connection, $licenses);
+		deleteUsersFromEntity($connection, $entity);
+		deleteLicensesFromEntity($connection, $entity);
+		importUsers($connection, $users, $entity);
+		importLicenses($connection, $licenses, $entity);
 		$connection->commit();
 	} catch (Throwable $throwable) {
 		if ($connection->inTransaction()) {
@@ -144,7 +146,21 @@ function truncateTables(PDO $connection, array $tables): void
 	}
 }
 
-function importUsers(PDO $connection, array $users): void
+function deleteUsersFromEntity(PDO $connection, string $entity): void
+{
+	$sql = 'DELETE FROM tbl_m365_users WHERE entity = :entity';
+	$statement = $connection->prepare($sql);
+	$statement->execute([':entity' => $entity]);
+}
+
+function deleteLicensesFromEntity(PDO $connection, string $entity): void
+{
+	$sql = 'DELETE FROM tbl_m365_licenses WHERE entity = :entity';
+	$statement = $connection->prepare($sql);
+	$statement->execute([':entity' => $entity]);
+}
+
+function importUsers(PDO $connection, array $users, string $entity): void
 {
 	$sql = <<<'SQL'
 INSERT INTO tbl_m365_users (
@@ -163,7 +179,8 @@ INSERT INTO tbl_m365_users (
 	manager_name,
 	manager_upn,
 	mail_box_type,
-	manager_id
+	manager_id,
+	entity
 ) VALUES (
 	:id,
 	:user_principal_name,
@@ -180,7 +197,8 @@ INSERT INTO tbl_m365_users (
 	:manager_name,
 	:manager_upn,
 	:mail_box_type,
-	:manager_id
+	:manager_id,
+	:entity
 )
 SQL;
 
@@ -204,21 +222,24 @@ SQL;
 			':manager_upn' => $row['managerupn'] ?? null,
 			':mail_box_type' => $row['mailboxtype'] ?? null,
 			':manager_id' => $row['managerid'] ?? null,
+			':entity' => $entity,
 		]);
 	}
 }
 
-function importLicenses(PDO $connection, array $licenses): void
+function importLicenses(PDO $connection, array $licenses, string $entity): void
 {
 	$sql = <<<'SQL'
 INSERT INTO tbl_m365_licenses (
 	id,
 	license_name,
-	sku_value
+	sku_value,
+	entity
 ) VALUES (
 	:id,
 	:license_name,
-	:sku_value
+	:sku_value,
+	:entity
 )
 SQL;
 
@@ -229,6 +250,7 @@ SQL;
 			':id' => requiredValue($row, 'id'),
 			':license_name' => requiredValue($row, 'license'),
 			':sku_value' => requiredValue($row, 'sku_value'),
+			':entity' => $entity,
 		]);
 	}
 }
