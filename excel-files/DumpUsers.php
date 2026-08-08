@@ -27,7 +27,7 @@ try {
 		deleteLicensesFromEntity($connection, $entity);
 		importUsers($connection, $users, $entity);
 		importLicenses($connection, $licenses, $entity);
-		$connection->commit(); 
+		$connection->commit();
 	} catch (Throwable $throwable) {
 		if ($connection->inTransaction()) {
 			$connection->rollBack();
