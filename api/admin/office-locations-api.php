@@ -5,10 +5,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 	exit;
 }
 
-require_once __DIR__ . '../../../classes/admin/OfficeLocations.php';
-require_once __DIR__ . '../../../classes/authentication/middle.php';
-require_once __DIR__ . '../../../classes/Logger.php';
-require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
+require_once __DIR__ . '/../../../classes/admin/OfficeLocations.php';
+require_once __DIR__ . '/../../../classes/authentication/middle.php';
+require_once __DIR__ . '/../../../classes/Logger.php';
+require_once __DIR__ . '/../../../classes/authentication/LoginUser.php';
 
 authenticateJWT();
 
