@@ -282,6 +282,7 @@ class Employee
             // validate the data before adding to the tbl_contact table
             $f_name = trim($f_name);
             $l_name = trim($l_name);
+            var_dump($contactTypeId);
 
             $contactId = $this->addContact($f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $cityId, $stateId, $pin, $countryId, $contactTypeId, $join_date, $exit_date, $statusId, $entityId, $departmentId, $designationId, $image, $userId, $module, $username);
             if (!$contactId) {
@@ -574,6 +575,8 @@ class Employee
             if (strtolower(trim($row['emp_status'])) !== 'active' && strtolower(trim($row['emp_status'])) !== 'in-active' && strtolower(trim($row['emp_status'])) !== 'suspended' && strtolower(trim($row['emp_status'])) !== 'blocked') {
              
             throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);
+            var_dump($row['emp_status']);    
+            throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);
             }
             $empType = strtolower(str_replace('-', ' ', trim($row['emp_type'])));
             if ($empType !== 'regular' && $empType !== 'non regular') {
@@ -624,6 +627,10 @@ class Employee
             $stateId = intval($row['state']);
             $countryId = intval($row['country']);
             
+            $cityId = intval($row['city']);
+            $stateId = intval($row['state']);
+            $countryId = intval($row['country']);
+            
             $contactTypeId = intval($lookupCache->getContactTypeId(strtolower(trim($contactType))));
             if (!$contactTypeId) {
                 throw new Exception('Contact type not found: ' . $contactType);
@@ -636,6 +643,8 @@ class Employee
             if (!$entityId) {
                 throw new Exception('Entity not found: ' . $row['entity_code']);
             }
+            $departmentId = intval($row['department']);
+            $designationId = intval($row['designation']);
             $departmentId = intval($row['department']);
             $designationId = intval($row['designation']);
 
@@ -667,6 +676,7 @@ class Employee
                 $stateId,
                 $countryId,
                 $row['pin'],
+                $officeLocationId,
                 $officeLocationId,
                 $contactTypeId,
                 $joinDate,
@@ -816,6 +826,7 @@ class Employee
             contact_id, user_id, emp_status, 
             uan, aadhar, pan_no, esi_no, bank_name, 
             bank_account_no, ifsc_code, 
+            m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
             m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'classes', $module, $username);
         $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'Employee added');
