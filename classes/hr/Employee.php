@@ -282,7 +282,6 @@ class Employee
             // validate the data before adding to the tbl_contact table
             $f_name = trim($f_name);
             $l_name = trim($l_name);
-            var_dump($contactTypeId);
 
             $contactId = $this->addContact($f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $cityId, $stateId, $pin, $countryId, $contactTypeId, $join_date, $exit_date, $statusId, $entityId, $departmentId, $designationId, $image, $userId, $module, $username);
             if (!$contactId) {
@@ -574,9 +573,7 @@ class Employee
 
             if (strtolower(trim($row['emp_status'])) !== 'active' && strtolower(trim($row['emp_status'])) !== 'in-active' && strtolower(trim($row['emp_status'])) !== 'suspended' && strtolower(trim($row['emp_status'])) !== 'blocked') {
              
-            throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);
-            var_dump($row['emp_status']);    
-            throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);
+            throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);   
             }
             $empType = strtolower(str_replace('-', ' ', trim($row['emp_type'])));
             if ($empType !== 'regular' && $empType !== 'non regular') {
