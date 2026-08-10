@@ -282,6 +282,7 @@ class Employee
             // validate the data before adding to the tbl_contact table
             $f_name = trim($f_name);
             $l_name = trim($l_name);
+            var_dump($contactTypeId);
 
             $contactId = $this->addContact($f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $cityId, $stateId, $pin, $countryId, $contactTypeId, $join_date, $exit_date, $statusId, $entityId, $departmentId, $designationId, $image, $userId, $module, $username);
             if (!$contactId) {
@@ -512,7 +513,6 @@ class Employee
                 $key = strtolower($row['old_emp_code']) . '_' . strtolower($row['entity_code']);
             }
 
-
             if (trim($row['f_name']) === '' || trim($row['l_name']) === '') {
                 $duplicateRowsInExcelFile[] = [
                     'row_number' => $rowNumber,
@@ -573,7 +573,8 @@ class Employee
 
 
             if (strtolower(trim($row['emp_status'])) !== 'active' && strtolower(trim($row['emp_status'])) !== 'in-active' && strtolower(trim($row['emp_status'])) !== 'suspended' && strtolower(trim($row['emp_status'])) !== 'blocked') {
-                throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);
+            var_dump($row['emp_status']);    
+            throw new Exception('Invalid value for emp_status: ' . $row['emp_status']);
             }
             $empType = strtolower(str_replace('-', ' ', trim($row['emp_type'])));
             if ($empType !== 'regular' && $empType !== 'non regular') {
@@ -620,18 +621,10 @@ class Employee
             }
 
             // validate the data
-            $cityId = intval($lookupCache->getLocationCityId(strtolower(trim($row['city']))));
-            if (!$cityId) {
-                throw new Exception('City not found: ' . $row['city']);
-            }
-            $stateId = intval($lookupCache->getLocationStateId(strtolower(trim($row['city']))));
-            if (!$stateId) {
-                throw new Exception('State not found: ' . $row['state']);
-            }
-            $countryId = intval($lookupCache->getLocationCountryId(strtolower(trim($row['city']))));
-            if (!$countryId) {
-                throw new Exception('Country not found: ' . $row['country']);
-            }
+            $cityId = intval($row['city']);
+            $stateId = intval($row['state']);
+            $countryId = intval($row['country']);
+            
             $contactTypeId = intval($lookupCache->getContactTypeId(strtolower(trim($contactType))));
             if (!$contactTypeId) {
                 throw new Exception('Contact type not found: ' . $contactType);
@@ -644,14 +637,8 @@ class Employee
             if (!$entityId) {
                 throw new Exception('Entity not found: ' . $row['entity_code']);
             }
-            $departmentId = intval($lookupCache->getDepartmentId(strtolower(trim($row['department']))));
-            if (!$departmentId) {
-                throw new Exception('Department not found: ' . $row['department']);
-            }
-            $designationId = intval($lookupCache->getDesignationId(strtolower(trim($row['designation']))));
-            if (!$designationId) {
-                throw new Exception('Designation not found: ' . $row['designation']);
-            }
+            $departmentId = intval($row['department']);
+            $designationId = intval($row['designation']);
 
             $joinDate = $row['doj'] ?? null;
             // $exitDate = $row['doe'] ? DateTime::createFromFormat('d-m-Y', $row['doe']) : null;
@@ -681,6 +668,7 @@ class Employee
                 $stateId,
                 $countryId,
                 $row['pin'],
+                $officeLocationId,
                 $contactTypeId,
                 $joinDate,
                 $exitDate,
@@ -697,7 +685,6 @@ class Employee
                 $row['bank_account_no'],
                 $row['ifsc_code'],
                 $m365,
-                $officeLocationId,
                 $row['old_emp_code'],
                 $username,
                 $module,
@@ -830,7 +817,7 @@ class Employee
             contact_id, user_id, emp_status, 
             uan, aadhar, pan_no, esi_no, bank_name, 
             bank_account_no, ifsc_code, 
-            m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'classes', $module, $username);
         $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'Employee added');
         return $employeeId;
