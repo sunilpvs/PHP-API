@@ -674,7 +674,6 @@ class Employee
                 $countryId,
                 $row['pin'],
                 $officeLocationId,
-                $officeLocationId,
                 $contactTypeId,
                 $joinDate,
                 $exitDate,

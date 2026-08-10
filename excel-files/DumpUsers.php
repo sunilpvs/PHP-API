@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 set_time_limit(0);
 
+// IF YOU ADD ANY NEW COLUMN, REMEMBER THE COLUMN NAME IS AUTOMATICALLY CONVERTED TO LOWERCASE BY normalizeHeader() FUNCTION. 
+// MAKE SURE YOU USE THE LOWERCASE COLUMN NAMES IN THE importUsers() AND importLicenses() FUNCTIONS BELOW.
+
 
 // The csv files may be outside the project directory, so we allow passing the paths as command-line arguments or environment variables. If not provided, we fall back to default paths within the project.
 const DEFAULT_USERS_CSV = __DIR__ . '/LicensedUsers.csv';
@@ -34,9 +37,9 @@ try {
 		}
 		throw $throwable;
 	} finally {
-        $connection = null;
-    }
-    echo 'Date: ' . date('Y-m-d H:i:s') . PHP_EOL;
+		$connection = null;
+	}
+	echo 'Date: ' . date('Y-m-d H:i:s') . PHP_EOL;
 	echo 'Import completed successfully.' . PHP_EOL;
 	echo 'Users imported: ' . count($users) . PHP_EOL;
 	echo 'License rows imported: ' . count($licenses) . PHP_EOL;
@@ -180,7 +183,8 @@ INSERT INTO tbl_m365_users (
 	manager_upn,
 	mail_box_type,
 	manager_id,
-	entity
+	entity,
+	accountEnabled
 ) VALUES (
 	:id,
 	:user_principal_name,
@@ -198,13 +202,15 @@ INSERT INTO tbl_m365_users (
 	:manager_upn,
 	:mail_box_type,
 	:manager_id,
-	:entity
+	:entity,
+	:accountEnabled
 )
 SQL;
 
 	$statement = $connection->prepare($sql);
 
 	foreach ($users as $row) {
+
 		$statement->execute([
 			':id' => requiredValue($row, 'id'),
 			':user_principal_name' => $row['userprincipalname'] ?? null,
@@ -223,6 +229,7 @@ SQL;
 			':mail_box_type' => $row['mailboxtype'] ?? null,
 			':manager_id' => $row['managerid'] ?? null,
 			':entity' => $entity,
+			':accountEnabled' => $row['accountenabled'] ?? null,
 		]);
 	}
 }
@@ -294,4 +301,3 @@ function requiredValue(array $row, string $key): string
 
 	return (string) $row[$key];
 }
-
