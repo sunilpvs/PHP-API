@@ -183,7 +183,7 @@ class ExcelHelper
     // return the table name of the main table from the configuration file
     public function getMainTableName()
     {
-       return $this->tableName;
+        return $this->tableName;
     }
 
     private function parseDateValue($value): ?string
@@ -231,7 +231,8 @@ class ExcelHelper
         return $raw;
     }
 
-    public function generateErrorReport($duplicateRowsInExcelFile, $duplicateRowsInDb) {
+    public function generateErrorReport($duplicateRowsInExcelFile, $duplicateRowsInDb)
+    {
         $errorReport = [];
 
         if (!empty($duplicateRowsInExcelFile)) {
