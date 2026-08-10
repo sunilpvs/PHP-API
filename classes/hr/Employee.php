@@ -827,7 +827,6 @@ class Employee
             uan, aadhar, pan_no, esi_no, bank_name, 
             bank_account_no, ifsc_code, 
             m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'classes', $module, $username);
         $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'Employee added');
         return $employeeId;
