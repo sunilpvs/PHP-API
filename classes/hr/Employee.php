@@ -629,8 +629,9 @@ class Employee
         foreach ($rows as $row) {
 
             if (strtolower(trim($row['m365'])) === 'y' || strtolower(trim($row['m365'])) === 'yes') {
-                $result = $this->checkM365UserExists($row['email'], $module, $username);
-                if ($result !== null) {
+                $result = $this->m365Validation($row['email'], $module, $username);
+                // true - valid, false - invalid (duplicate)
+                if (!$result) {
                     $duplicateRowsInExcelFile[] = [
                         'row_number' => $rowNumber,
                         'Error' => "Row has duplicate email. Email already exists in M365.",
@@ -1083,6 +1084,35 @@ class Employee
         return null;
     }
 
+    public function m365Validation($email, $module, $username){
+        // check if the email exists in tbl_m365_users
+        $query = 'SELECT 1 FROM tbl_m365_users WHERE user_principal_name = ?';
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        // since the email is not present in tbl_m365_users, it is not valid to add the employee record with m365 enabled. So return false.
+        if (!$result) {
+            return false;
+        }
+
+        // check if the email exists in tbl_employee, tbl_contact, tbl_users, tbl_user_modules
+        $query = 'SELECT 1 FROM tbl_employee emp
+                    JOIN tbl_contact cont ON emp.contact_id = cont.id
+                    JOIN tbl_users usr ON emp.user_id = usr.id
+                    JOIN tbl_user_modules um ON usr.id = um.user_id
+                    WHERE cont.email = ?';
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
+        // if the email is present in tbl_employee, tbl_contact, tbl_users, tbl_user_modules, 
+        // it is not valid to add the employee record with m365 enabled because it is treated as a duplicate record. 
+        // So return false stating the validation failed. If the email is not present in tbl_employee, tbl_contact, tbl_users, tbl_user_modules and present in tbl_m365_users, 
+        // it is valid to add the employee record with m365 enabled. So return true stating the validation passed.
+        if ($result) {
+            return false;
+        }
+        return true;
+
+    }
+
     public function getEmployeeCodeById($employeeId, $module, $username)
     {
         $query = 'SELECT emp_code FROM tbl_employee WHERE id = ?';
@@ -1206,6 +1236,8 @@ class Employee
         $result = $this->conn->runSingle($query, [$email]);
         return $result ?: null;
     }
+
+    
 
     public function updateM365() {}
 }

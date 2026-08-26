@@ -226,7 +226,7 @@ SQL;
 			':phone_number' => $row['phonenumber'] ?? null,
 			':manager_name' => $row['managername'] ?? null,
 			':manager_upn' => $row['managerupn'] ?? null,
-			':mail_box_type' => $row['mailboxtype'] ?? null,
+			':mail_box_type' => $row['usermailboxtype'] ?? null,
 			':manager_id' => $row['managerid'] ?? null,
 			':entity' => $entity,
 			':accountEnabled' => $row['accountenabled'] ?? null,
