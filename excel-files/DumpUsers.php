@@ -169,6 +169,7 @@ function importUsers(PDO $connection, array $users, string $entity): void
 INSERT INTO tbl_m365_users (
 	id,
 	user_principal_name,
+	mail,
 	first_name,
 	last_name,
 	display_name,
@@ -188,6 +189,7 @@ INSERT INTO tbl_m365_users (
 ) VALUES (
 	:id,
 	:user_principal_name,
+	:mail,
 	:first_name,
 	:last_name,
 	:display_name,
