@@ -634,7 +634,7 @@ class Employee
                 if (!$result) {
                     $duplicateRowsInExcelFile[] = [
                         'row_number' => $rowNumber,
-                        'Error' => "Row has duplicate email. Email already exists in M365.",
+                        'Error' => "Row has duplicate or Invalid email for M365. Please check the email address.",
                         'data' => [
                             'email' => $row['email'],
                         ]
@@ -798,14 +798,14 @@ class Employee
 
             // insert the data using the addEmployeeRecordForExcelImport function
             $this->addEmployeeRecordForExcelImport(
-                $row['f_name'],
-                $row['l_name'],
+                trim($row['f_name']),
+                trim($row['l_name']),
                 $dateOfBirth,
-                $row['email'],
-                $row['personal_email'],
+                strtolower(trim($row['email'])),
+                strtolower(trim($row['personal_email'])),
                 $row['mobile'],
-                $row['add1'],
-                $row['add2'],
+                trim($row['add1']),
+                trim($row['add2']),
                 $cityId,
                 $stateId,
                 $countryId,
@@ -819,15 +819,15 @@ class Employee
                 $departmentId,
                 $designationId,
                 $row['image'],
-                $row['uan'],
-                $row['aadhar'],
-                $row['pan_no'],
-                $row['esi_no'],
-                $row['bank_name'],
-                $row['bank_account_no'],
-                $row['ifsc_code'],
+                trim($row['uan']),
+                trim($row['aadhar']),
+                trim($row['pan_no']),
+                trim($row['esi_no']),
+                trim($row['bank_name']),
+                trim($row['bank_account_no']),
+                trim($row['ifsc_code']),
                 $m365,
-                $row['old_emp_code'],
+                trim($row['old_emp_code']),
                 $module,
                 $username
             );
@@ -1073,11 +1073,11 @@ class Employee
     }
 
 
-    public function checkM365UserExists($user_principal_name, $module, $username)
+    public function checkM365UserExists($email, $module, $username)
     {
-        $query = 'SELECT first_name, last_name FROM tbl_m365_users WHERE user_principal_name = ?';
-        $this->logger->logQuery($query, [$user_principal_name], 'classes', $module, $username);
-        $result = $this->conn->runSingle($query, [$user_principal_name]);
+        $query = 'SELECT first_name, last_name FROM tbl_m365_users WHERE mail = ?';
+        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$email]);
         if ($result) {
             return $result;
         }
@@ -1086,7 +1086,7 @@ class Employee
 
     public function m365Validation($email, $module, $username){
         // check if the email exists in tbl_m365_users
-        $query = 'SELECT 1 FROM tbl_m365_users WHERE user_principal_name = ?';
+        $query = 'SELECT 1 FROM tbl_m365_users WHERE mail = ?';
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
         $result = $this->conn->runSingle($query, [$email]);
         // since the email is not present in tbl_m365_users, it is not valid to add the employee record with m365 enabled. So return false.

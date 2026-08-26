@@ -214,6 +214,7 @@ SQL;
 		$statement->execute([
 			':id' => requiredValue($row, 'id'),
 			':user_principal_name' => $row['userprincipalname'] ?? null,
+			':mail' => $row['mail'] ?? null,
 			':first_name' => $row['firstname'] ?? null,
 			':last_name' => $row['lastname'] ?? null,
 			':display_name' => $row['displayname'] ?? null,
