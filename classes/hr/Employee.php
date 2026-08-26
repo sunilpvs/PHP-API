@@ -10,6 +10,7 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php';
 
 use Dotenv\Dotenv;
 
+use function PHPSTORM_META\type;
 
 // tbl_contact table structure
 // id	int	NO	PRI		auto_increment
@@ -638,9 +639,9 @@ class Employee
                     $rowNumber++;
                     continue;
                 }
-                $key = strtolower($row['email']) . '_' . strtolower($row['entity_code']);
+                $key = strtolower($row['email']) . '_' . strtolower($row['entity_id']);
             } else {
-                $key = strtolower($row['old_emp_code']) . '_' . strtolower($row['entity_code']);
+                $key = strtolower($row['old_emp_code']) . '_' . strtolower($row['entity_id']);
             }
 
             if (trim($row['f_name']) === '' || trim($row['l_name']) === '') {
@@ -734,20 +735,20 @@ class Employee
 
 
             if ($m365) {
-                $key = strtolower($row['email']) . '_' . strtolower($row['entity_code']);
+                $key = strtolower($row['email']) . '_' . strtolower($row['entity_id']);
                 if (isset($m365ExistingRowsMap[$key])) {
                     $duplicateRowsInDb[] = ['data' => [
                         'email' => $row['email'],
-                        'entity_code' => $row['entity_code']
+                        'entity_id' => $row['entity_id']
                     ]];
                     continue;
                 }
             } else {
-                $key = strtolower($row['old_emp_code']) . '_' . strtolower($row['entity_code']);
+                $key = strtolower($row['old_emp_code']) . '_' . strtolower($row['entity_id']);
                 if (isset($nonM365ExistingRowsMap[$key])) {
                     $duplicateRowsInDb[] = ['data' => [
                         'old_emp_code' => $row['old_emp_code'],
-                        'entity_code' => $row['entity_code']
+                        'entity_id' => $row['entity_id']
                     ]];
                     continue;
                 }
@@ -771,10 +772,11 @@ class Employee
             if (!$statusId) {
                 throw new Exception('Status not found: ' . $row['emp_status']);
             }
-            $entityId = intval($lookupCache->getEntityId(strtolower(trim($row['entity_code']))));
-            if (!$entityId) {
-                throw new Exception('Entity not found: ' . $row['entity_code']);
-            }
+            // $entityId = intval($lookupCache->getEntityId(strtolower(trim($row['entity_code']))));
+            // if (!$entityId) {
+            //     throw new Exception('Entity not found: ' . $row['entity_code']);
+            // }
+            $entityId = intval($row['entity_id']);
             $departmentId = intval($row['department']);
             $designationId = intval($row['designation']);
 
@@ -788,6 +790,7 @@ class Employee
             $row['pin'] = $row['pin'] ?? 0;
             $row['add1'] = $row['add1'] ?? null;
             $row['add2'] = $row['add2'] ?? null;
+            $row['personal_email'] = $row['personal_email'] ?? $row['email'] ? $row['email'] : null;
             $officeLocationId = intval($row['office_location_id'] ?? 0);
 
             // insert the data using the addEmployeeRecordForExcelImport function
@@ -796,7 +799,7 @@ class Employee
                 $row['l_name'],
                 $dateOfBirth,
                 $row['email'],
-                $row['email'],
+                $row['personal_email'],
                 $row['mobile'],
                 $row['add1'],
                 $row['add2'],

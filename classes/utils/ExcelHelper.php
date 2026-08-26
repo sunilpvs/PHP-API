@@ -113,9 +113,8 @@ class ExcelHelper
 
 
         foreach ($rows as $row) {
-
             if (count($headers) !== count($row)) continue;
-
+            
             if (count(array_filter($row)) === 0) {
                 continue;
             }
