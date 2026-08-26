@@ -106,7 +106,7 @@ switch ($method) {
                 $excelHelper->createTemporaryTable();
                 $batchId = $excelHelper->importExcelToTemporaryTable($file);
                 $errorReport = $employeeOb->importDataFromExcel($batchId, $module, $username);
-                // $excelHelper->cleanTemporaryTable($batchId);
+                $excelHelper->cleanTemporaryTable($batchId);
                 http_response_code(200);
                 echo json_encode(["message" => "Data imported and inserted successfully.", "errors" => $errorReport]);
             } catch (Exception $e) {

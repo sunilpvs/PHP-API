@@ -132,6 +132,22 @@ class DBController
         }
     }
 
+    public function dropTable($query, $logMessage = '')
+    {
+        try {
+            $this->conn->exec($query);
+            if ($logMessage) {
+                $logMessage .= " - Table dropped successfully.";
+            } else {
+                $logMessage = "Table dropped successfully.";
+            }
+            // $this->logActivity($logMessage, $query);
+            return true;
+        } catch (PDOException $ex) {
+            throw $ex;
+        }
+    }
+
     public function insertBatch($query, $paramsArray = [], $logMessage = '')
     {
         try {

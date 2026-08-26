@@ -60,6 +60,9 @@ class ExcelHelper
 
         $columnsSql = implode(", ", $columns);
         $tempTableName = "tbl_tmp_" . strtolower($this->module);
+        // Drop the temporary table if it already exists to ensure a clean state
+        $queryDrop = "DROP TABLE IF EXISTS `$tempTableName`";
+        $this->conn->dropTable($queryDrop);
         $query = "CREATE TABLE IF NOT EXISTS `$tempTableName` ($columnsSql)";
         $this->conn->createTable($query);
     }

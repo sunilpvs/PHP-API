@@ -110,6 +110,8 @@ class Employee
                                     CASE WHEN cont.contacttype_id = 2 THEN 'Employee' ELSE 'Contract' END as emp_type,
                                     cont.join_date as joining_date, cont.exit_date as exit_date, 
                                     emp.old_emp_code as old_emp_code,
+                                    emp.emp_code as emp_code, CASE WHEN emp.emp_status = 1 THEN 'Active' WHEN emp.emp_status = 2 THEN 'In-Active' 
+                                    WHEN emp.emp_status = 3 THEN 'Suspended' WHEN emp.emp_status = 4 THEN 'Blocked' ELSE 'Unknown' END as emp_status,
                                     CASE WHEN emp.m365 = 1 THEN 'Yes' ELSE 'No' END as m365,
                                     cont.email as email, CASE WHEN cont.add1 IS NULL THEN '-' ELSE cont.add1 END as add1,
                                     CASE WHEN cont.add2 IS NULL THEN '-' ELSE cont.add2 END as add2,
@@ -675,25 +677,25 @@ class Employee
         $duplicateRowsInDb = [];
 
         // Existing M365 employees
-        $m365ExistingRows = $this->conn->runQuery("SELECT user.email AS email, ent.entity_code AS entity_code FROM $tableName emp 
+        $m365ExistingRows = $this->conn->runQuery("SELECT user.email AS email, ent.id AS entity FROM $tableName emp 
                                 JOIN tbl_entity ent ON emp.entity_id = ent.id 
                                 JOIN tbl_users user on user.id = emp.user_id 
                                 WHERE emp.m365 = 1");
         $m365ExistingRowsMap = [];
 
         foreach ($m365ExistingRows as $m365ExistingRow) {
-            $key = strtolower($m365ExistingRow['email']) . '_' . strtolower($m365ExistingRow['entity_code']);
+            $key = strtolower($m365ExistingRow['email']) . '_' . strtolower($m365ExistingRow['entity']);
             $m365ExistingRowsMap[$key] = true;
         }
 
         // Existing non-M365 employees
-        $nonM365ExistingRows = $this->conn->runQuery("SELECT emp.old_emp_code AS old_emp_code , ent.entity_code AS entity_code 
+        $nonM365ExistingRows = $this->conn->runQuery("SELECT emp.old_emp_code AS old_emp_code , ent.id AS entity
                                 FROM $tableName emp 
 								JOIN tbl_entity ent ON ent.id = emp.entity_id 
                                 WHERE emp.m365 = 0");
         $nonM365ExistingRowsMap = [];
         foreach ($nonM365ExistingRows as $nonM365ExistingRow) {
-            $key = strtolower($nonM365ExistingRow['old_emp_code']) . '_' . strtolower($nonM365ExistingRow['entity_code']);
+            $key = strtolower($nonM365ExistingRow['old_emp_code']) . '_' . strtolower($nonM365ExistingRow['entity']);
             $nonM365ExistingRowsMap[$key] = true;
         }
 
