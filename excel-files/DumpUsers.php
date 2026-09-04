@@ -66,6 +66,7 @@ function createConnection(string $iniPath): PDO
 		}
 	}
 
+	
 	$dsn = sprintf(
 		'mysql:host=%s;dbname=%s;charset=utf8mb4',
 		trim((string) $database['host'], "\"' "),

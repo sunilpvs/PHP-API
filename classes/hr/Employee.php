@@ -101,7 +101,11 @@ class Employee
 
     private static $EMP_QUERY = "SELECT 
                                     emp.id as id,
-                                    ent.entity_name as entity_name, dept.name as department, 
+                                    ent.id as entity_id,    
+                                    ent.entity_name as entity_name, 
+                                    dept.id as department_id,
+                                    dept.name as department, 
+                                    desn.id as designation_id,
                                     desn.name as designation, cont.f_name as first_name, 
                                     cont.l_name as last_name, 
                                     concat(cont.f_name,' ',cont.l_name) as display_name,
@@ -115,7 +119,14 @@ class Employee
                                     CASE WHEN emp.m365 = 1 THEN 'Yes' ELSE 'No' END as m365,
                                     cont.email as email, CASE WHEN cont.add1 IS NULL THEN '-' ELSE cont.add1 END as add1,
                                     CASE WHEN cont.add2 IS NULL THEN '-' ELSE cont.add2 END as add2,
-                                    country.country as country, state.state as state, city.city as city, 
+                                    country.id as country_id,
+                                    country.country as country, 
+                                    state.id as state_id,
+                                    state.state as state, 
+                                    city.id as city_id,
+                                    city.city as city, 
+                                    office_location.id as office_location_id,
+                                    office_location.name as office_location,
                                     cont.pin as pin,
                                     emp.aadhar as aadhar, emp.uan as uan, emp.pan_no as pan, emp.esi_no as esi, 
                                     emp.bank_name as bank_name, emp.bank_account_no as bank_account_no, 
@@ -127,7 +138,8 @@ class Employee
                                     JOIN tbl_designation desn on cont.designation = desn.id
                                     JOIN tbl_country country on cont.country = country.id
                                     JOIN tbl_state state on cont.state = state.id
-                                    JOIN tbl_city city on cont.city = city.id";
+                                    JOIN tbl_city city on cont.city = city.id
+                                    JOIN mas_office_location office_location on emp.office_location_id = office_location.id";
 
     public function __construct()
     {
@@ -450,18 +462,18 @@ class Employee
                     // get it admin portal url from the env file
                     "IT Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
                 ];
-                $emailSent = $mailer->sendInfoEmail(
-                    subject: "New Employee Record Added - M365 Account Creation Required",
-                    greetings: "Dear IT Admin,",
-                    name: $salutationName ? $salutationName : 'Shrichandra Group Team',
-                    keyValueArray: $keyValueData,
-                    to: $itAdminEmails,
-                    cc: [], // add hr mail
-                    bcc: $itAdminEmails,
-                );
-
-                if (!$emailSent) {
-                    throw new Exception('Failed to send email to IT Admin for M365 account creation');
+                try {
+                    $mailer->sendInfoEmail(
+                        subject: "New Employee Record Added - M365 Account Creation Required",
+                        greetings: "Dear IT Admin,",
+                        name: $salutationName ? $salutationName : 'Shrichandra Group Team',
+                        keyValueArray: $keyValueData,
+                        to: $itAdminEmails,
+                        cc: [], // add hr mail
+                        bcc: $itAdminEmails,
+                    );
+                } catch (Exception $e) {
+                    $this->logger->log('Failed to send email to IT Admin for M365 account creation: ' . $e->getMessage(), 'classes', $module);
                 }
             }
 
@@ -513,6 +525,9 @@ class Employee
             throw new Exception('Employee with ID ' . $employeeId . ' does not exist.');
         }
         try {
+            $hadM365 = $this->employeeHasM365Enabled($employeeId, $module, $username);
+            $contactId = $this->getContactIdForEmployee($employeeId, $module, $username);
+            $userId = $this->getUserIdForEmployee($employeeId, $module, $username);
             $f_name = trim($f_name);
             $l_name = trim($l_name);
             $empType = $this->normalizeEmployeeType($empType);
@@ -521,15 +536,13 @@ class Employee
 
             // Only personal email can be updated, not m365 email. If m365 is enabled, personal email must be different from m365 email.
 
-            // if ($m365) {
-            //     if (strtolower(trim((string) $email)) === strtolower(trim((string) $personal_email))) {
-            //         throw new Exception('Personal email must be different from email when m365 is enabled');
-            //     }
-
-
-            // } else {
-            // $personal_email = $email;
-            // }
+            if ($m365 && !$hadM365) {
+                if (strtolower(trim((string) $email)) === strtolower(trim((string) $personal_email))) {
+                    throw new Exception('Personal email must be different from email when m365 is enabled');
+                }
+            } else {
+                $personal_email = $email;
+            }
             if ($empType === 'regular') {
                 $contactTypeId = 2; // Employee
             } else {
@@ -537,8 +550,17 @@ class Employee
             }
 
 
+            // Check if contact exists and update it
+            $contactExists = $this->checkContactExists($contactId, $module, $username);
+            if (!$contactExists) {
+                throw new Exception('Contact does not exist');
+            }
+
+            // normalize these values
+            $pin = $pin ?? 0;
             // Pass everything as IDs, just like Excel import
             $contactId = $this->updateContact(
+                $contactId,
                 $f_name,
                 $l_name,
                 $birth_date,
@@ -563,40 +585,71 @@ class Employee
                 $username
             );
             if (!$contactId) {
-                throw new Exception('Contact not added');
+                throw new Exception('Contact not updated');
             }
 
-            $userId = $this->updateUser($email, $statusId, $contactId, $entityId, $userId, $module, $username);
-            if (!$userId) {
-                throw new Exception('User not added');
+            // Check User Record if exists
+            $userExists = $this->checkUserExists($userId, $module, $username);
+            if (!$userExists) {
+                throw new Exception('User does not exist');
+            }
+            $userUpdated = $this->updateUser($userId, $email, $statusId, $contactId, $entityId, $module, $username);
+            if (!$userUpdated) {
+                throw new Exception('User not updated');
             }
 
-            // $employeeId = $this->updateEmployee(
-            //     $entityId,
-            //     $contactId,
-            //     $userId,
-            //     $statusId,
-            //     $uan,
-            //     $aadhar,
-            //     $pan_no,
-            //     $esi_no,
-            //     $bank_name,
-            //     $bank_account_no,
-            //     $ifsc_code,
-            //     $m365,
-            //     $officeLocationId,
-            //     $old_emp_code,
-            //     $userId,
-            //     $module,
-            //     $username
-            // );
-            // if (!$employeeId) {
-            //     throw new Exception('Employee not added');
-            // }
+            $employeeUpdated = $this->updateEmployee(
+                $employeeId,
+                $entityId,
+                $statusId,
+                $uan,
+                $aadhar,
+                $pan_no,
+                $esi_no,
+                $bank_name,
+                $bank_account_no,
+                $ifsc_code,
+                $m365,
+                $officeLocationId,
+                $old_emp_code,
+                $userId,
+                $module,
+                $username
+            );
+            if (!$employeeUpdated) {
+                throw new Exception('Employee not updated');
+            }
+            $salutationName = $this->entityOb->getSalutationNameByEntityId($entityId, $module, $username);
+            $empCode = $this->getEmployeeCodeById($employeeId, $module, $username);
+            $itAdminEmails = $this->getItAdminEmails('hr', 'system');
 
+            $mailer = new AutoMail();
             // update m365 through graph api if m365 is Y, y, Yes, yes
-            if ($m365) {
+            if ($m365 && !$hadM365) {
                 // TODO: implement graph api call (function) to update m365 user
+                // send a mail to IT admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
+                $name = $salutationName ? $salutationName : 'Shrichandra Group Team';
+                $keyValueData = [
+                    "Message" => "An employee record has been updated for $f_name $l_name. Please update the Azure directory for this employee. Refer Admin Portal for more details.",
+                    "Employee Name" => $f_name . ' ' . $l_name,
+                    "Employee Email" => $email,
+                    "Employee Code" => $empCode,
+                    // get it admin portal url from the env file
+                    "IT Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
+                ];
+                try {
+                    $mailer->sendInfoEmail(
+                        subject: "Employee M365 Access Enabled - Azure Directory Update Required",
+                        greetings: "Dear IT Admin,",
+                        name: $name,
+                        keyValueArray: $keyValueData,
+                        to: $itAdminEmails,
+                        cc: [], // add hr mail
+                        bcc: $itAdminEmails,
+                    );
+                } catch (Exception $e) {
+                    $this->logger->log('Failed to send email to IT Admin: ' . $e->getMessage(), 'classes', $module);
+                }
             }
             return true;
         } catch (Exception $e) {
@@ -836,6 +889,7 @@ class Employee
         return $this->excelHelper->generateErrorReport($duplicateRowsInExcelFile, $duplicateRowsInDb);
     }
 
+
     // function to create an employee code based on the employee prefix
     // example: EMP-00001
     public function generateEmployeeCode($entity_id, $module, $username)
@@ -884,6 +938,7 @@ class Employee
     }
 
     public function updateContact(
+        $contactId,
         $f_name,
         $l_name,
         $birth_date,
@@ -908,20 +963,12 @@ class Employee
         $username
     ) {
         try {
-            $existingContact = $this->getContactByEmail($email, $module, $username);
-            if (!$existingContact) {
-                throw new Exception('Contact with email ' . $email . ' does not exist.');
-            }
-        } catch (Exception $e) {
-            throw new Exception('Failed to fetch existing contact: ' . $e->getMessage());
-        }
-        try {
             $query = 'UPDATE tbl_contact SET f_name = ?, l_name = ?, dob = ?, email = ?, personal_email = ?, 
                         mobile = ?, add1 = ?, add2 = ?, city = ?, state = ?, pin = ?, country = ?, contacttype_id = ?, 
                         join_date = ?, exit_date = ?, emp_status = ?, entity_id = ?, department = ?, designation = ?, 
-                        image = ?, last_updated = ? WHERE email = ?';
-            $this->logger->logQuery($query, [$f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $city, $state, $pin, $country, $contacttype_id, $join_date, $exit_date, $emp_status, $entity_id, $department, $designation, $image, $username, $email], 'classes', $module, $username);
-            $contactId = $this->conn->update($query, [$f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $city, $state, $pin, $country, $contacttype_id, $join_date, $exit_date, $emp_status, $entity_id, $department, $designation, $image, $username, $email], 'Contact updated');
+                        image = ?, last_updated = ? WHERE id = ?';
+            $this->logger->logQuery($query, [$f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $city, $state, $pin, $country, $contacttype_id, $join_date, $exit_date, $emp_status, $entity_id, $department, $designation, $image, $username, $contactId], 'classes', $module, $username);
+            $contactId = $this->conn->update($query, [$f_name, $l_name, $birth_date, $email, $personal_email, $mobile, $add1, $add2, $city, $state, $pin, $country, $contacttype_id, $join_date, $exit_date, $emp_status, $entity_id, $department, $designation, $image, $username, $contactId], 'Contact updated');
             return true;
         } catch (Exception $e) {
             throw new Exception('Failed to update contact: ' . $e->getMessage());
@@ -945,20 +992,12 @@ class Employee
         return $userId;
     }
 
-    public function updateUser($email, $user_status, $contact_id, $entity_id, $module, $username)
+    public function updateUser($user_id, $email, $user_status, $contact_id, $entity_id, $module, $username)
     {
         try {
-            $existingUser = $this->getUserByEmail($email, $module, $username);
-            if (!$existingUser) {
-                throw new Exception('User with email ' . $email . ' does not exist.');
-            }
-        } catch (Exception $e) {
-            throw new Exception('Failed to fetch existing user: ' . $e->getMessage());
-        }
-        try {
-            $query = 'UPDATE tbl_users SET user_status = ?, contact_id = ?, entity_id = ?, last_updatedBy = ? WHERE email = ?';
-            $this->logger->logQuery($query, [$user_status, $contact_id, $entity_id, $username, $email], 'classes', $module, $username);
-            $userId = $this->conn->update($query, [$user_status, $contact_id, $entity_id, $username, $email], 'User updated');
+            $query = 'UPDATE tbl_users SET user_status = ?, contact_id = ?, entity_id = ?, last_updatedBy = ? WHERE id = ?';
+            $this->logger->logQuery($query, [$user_status, $contact_id, $entity_id, $username, $user_id], 'classes', $module, $username);
+            $this->conn->update($query, [$user_status, $contact_id, $entity_id, $username, $user_id], 'User updated');
             return true;
         } catch (Exception $e) {
             throw new Exception('Failed to update user: ' . $e->getMessage());
@@ -977,7 +1016,7 @@ class Employee
         return $userModuleId;
     }
 
-    
+
 
     public function insertEmployee($entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username)
     {
@@ -996,26 +1035,29 @@ class Employee
         return $employeeId;
     }
 
-    // public function updateEmployee($entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username)
-    // {
-    //     try {
-    //         // Check if the employee exists
-    //         if (!$this->employeeExistsByContactIdAndUserId($contact_id, $user_id, $module, $username)) {
-    //             throw new Exception('Employee with contact ID ' . $contact_id . ' does not exist.');
-    //         }
 
-    //         // Normalize m365 value
-    //         $m365 = ($m365 === true || $m365 === 1 || in_array(strtolower(trim((string)$m365)), ['y', 'yes', '1', 'true'], true)) ? 1 : 0;
-    //         $officeLocationId = $officeLocationId ?: 1; // default to 1 if not provided
 
-    //         // Update the employee record
-    //         $query = 'UPDATE tbl_employee SET entity_id = ?, user_id = ?, emp_status = ?, uan = ?, aadhar = ?, pan_no = ?, esi_no = ?, bank_name = ?, bank_account_no = ?, ifsc_code = ?, m365 = ?, office_location_id = ?, old_emp_code = ?, last_updatedBy = ? WHERE contact_id = ?';
-    //         $this->logger->logQuery($query, [$entity_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $contact_id], 'classes', $module, $username);
-    //         return (bool)$this->conn->update($query, [$entity_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $contact_id], 'Employee updated');
-    //     } catch (Exception $e) {
-    //         throw new Exception('Failed to update employee: ' . $e->getMessage());
-    //     }
-    // }
+    public function updateEmployee($employeeId, $entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username)
+    {
+        try {
+            // Check if the employee exists
+            if (!$this->employeeExistsById($employeeId, $module, $username)) {
+                throw new Exception('Employee with  ' . $employeeId . ' does not exist.');
+            }
+
+            // Normalize m365 value
+            $m365 = ($m365 === true || $m365 === 1 || in_array(strtolower(trim((string)$m365)), ['y', 'yes', '1', 'true'], true)) ? 1 : 0;
+            $officeLocationId = $officeLocationId ?: 1; // default to 1 if not provided
+
+            // Update the employee record
+            $query = 'UPDATE tbl_employee SET entity_id = ?, emp_status = ?, uan = ?, aadhar = ?, pan_no = ?, esi_no = ?, bank_name = ?, bank_account_no = ?, ifsc_code = ?, m365 = ?, office_location_id = ?, old_emp_code = ?, updatedBy = ? WHERE id = ?';
+            $this->logger->logQuery($query, [$entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $employeeId], 'classes', $module, $username);
+            $this->conn->update($query, [$entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $employeeId], 'Employee updated');
+            return true;
+        } catch (Exception $e) {
+            throw new Exception('Failed to update employee: ' . $e->getMessage());
+        }
+    }
 
     public function getLocationDetails($cityName, $module, $username)
     {
@@ -1084,7 +1126,8 @@ class Employee
         return null;
     }
 
-    public function m365Validation($email, $module, $username){
+    public function m365Validation($email, $module, $username)
+    {
         // check if the email exists in tbl_m365_users
         $query = 'SELECT 1 FROM tbl_m365_users WHERE mail = ?';
         $this->logger->logQuery($query, [$email], 'classes', $module, $username);
@@ -1110,7 +1153,6 @@ class Employee
             return false;
         }
         return true;
-
     }
 
     public function getEmployeeCodeById($employeeId, $module, $username)
@@ -1221,6 +1263,15 @@ class Employee
         return (bool)$result;
     }
 
+    private function employeeHasM365Enabled($employeeId, $module, $username)
+    {
+        $query = 'SELECT m365 FROM tbl_employee WHERE id = ?';
+        $this->logger->logQuery($query, [$employeeId], 'classes', $module, $username);
+        $employee = $this->conn->runSingle($query, [$employeeId]);
+        return isset($employee['m365']) && (int) $employee['m365'] === 1;
+    }
+
+
     public function getContactByEmail($email, $module, $username)
     {
         $query = 'SELECT * FROM tbl_contact WHERE email = ?';
@@ -1229,15 +1280,51 @@ class Employee
         return $result ?: null;
     }
 
-    public function getUserByEmail($email, $module, $username)
+    public function checkUserExists($userId, $module, $username)
     {
-        $query = 'SELECT * FROM tbl_users WHERE email = ?';
-        $this->logger->logQuery($query, [$email], 'classes', $module, $username);
-        $result = $this->conn->runSingle($query, [$email]);
-        return $result ?: null;
+        $query = 'SELECT 1 FROM tbl_users WHERE id = ?';
+        $this->logger->logQuery($query, [$userId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$userId]);
+        return (bool)$result;
     }
 
-    
+    public function employeeExistsById($employeeId, $module, $username)
+    {
+        $query = 'SELECT 1 FROM tbl_employee WHERE id = ?';
+        // complete the function
+        $this->logger->logQuery($query, [$employeeId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$employeeId]);
+        return (bool)$result;
+    }
+
+    public function checkContactExists($contactId, $module, $username)
+    {
+        $query = 'SELECT 1 FROM tbl_contact WHERE id = ?';
+        $this->logger->logQuery($query, [$contactId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$contactId]);
+        return (bool)$result;
+    }
+
+    public function getUserIdForEmployee($employeeId, $module, $username)
+    {
+        $query = 'SELECT user_id FROM tbl_employee WHERE id = ?';
+        $this->logger->logQuery($query, [$employeeId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$employeeId]);
+        return $result['user_id'] ?? null;
+    }
+
+    public function getContactIdForEmployee($employeeId, $module, $username)
+    {
+        $query = 'SELECT contact_id FROM tbl_employee WHERE id = ?';
+        $this->logger->logQuery($query, [$employeeId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$employeeId]);
+        return $result['contact_id'] ?? null;
+    }
+
+
+
+
+
 
     public function updateM365() {}
 }

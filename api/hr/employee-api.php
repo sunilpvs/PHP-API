@@ -73,8 +73,7 @@ switch ($method) {
             if ($employee == null) {
                 http_response_code(200);
                 echo json_encode(['exists' => false]);
-            }
-            else {
+            } else {
                 http_response_code(200);
                 echo json_encode(['exists' => true]);
             }
@@ -120,7 +119,7 @@ switch ($method) {
         // removed email, contacttype(auto set based on employee)
         // if m365 is true, then email and personal email are different
         // if m365 is false, then email and personal email are same
-       
+
         if (
             isset($input['f_name']) && isset($input['l_name']) && isset($input['dob']) && isset($input['mobile']) && isset($input['email']) &&
             isset($input['city']) && isset($input['state']) && array_key_exists('pin', $input) && isset($input['country']) && array_key_exists('add1', $input) && array_key_exists('add2', $input) &&
@@ -260,4 +259,74 @@ switch ($method) {
         http_response_code(400);
         echo json_encode(["error" => "Invalid request"]);
         break;
+
+    case 'PUT':
+        $logger->log("PUT request received");
+        $id = $_GET['id'] ?? null;
+        if ($id === null) {
+            http_response_code(400);
+            echo json_encode(["error" => "Missing employee ID"]);
+            break;
+        }
+
+        if (
+            isset($input['f_name'], $input['l_name'], $input['dob'], $input['mobile'], $input['email']) &&
+            isset($input['city'], $input['state'], $input['country'], $input['personal_email'], $input['join_date'], $input['emp_type']) &&
+            isset($input['emp_status'], $input['entity_id'], $input['department_id'], $input['designation_id'], $input['uan']) &&
+            isset($input['aadhar'], $input['pan_no'], $input['esi_no'], $input['bank_name'], $input['bank_account_no']) &&
+            isset($input['ifsc_code'], $input['m365'], $input['old_emp_code']) &&
+            array_key_exists('pin', $input) && array_key_exists('add1', $input) && array_key_exists('add2', $input) && array_key_exists('image', $input)
+        ) {
+            try {
+                $employee = $employeeOb->updateEmployeeRecord(
+                    intval($id),
+                    trim($input['f_name']),
+                    trim($input['l_name']),
+                    trim($input['dob']),
+                    trim($input['email']),
+                    trim($input['personal_email']),
+                    trim($input['mobile']),
+                    $input['add1'] === null ? null : trim($input['add1']),
+                    $input['add2'] === null ? null : trim($input['add2']),
+                    intval($input['city']),
+                    intval($input['state']),
+                    intval($input['country']),
+                    $input['pin'] === null ? null : trim((int) $input['pin']),
+                    trim($input['join_date']),
+                    isset($input['exit_date']) ? trim((string) $input['exit_date']) : null,
+                    $input['emp_type'],
+                    intval($input['emp_status']),
+                    intval($input['entity_id']),
+                    intval($input['department_id']),
+                    intval($input['designation_id']),
+                    $input['image'] === null ? null : trim($input['image']),
+                    trim($input['uan']),
+                    trim($input['aadhar']),
+                    trim($input['pan_no']),
+                    trim($input['esi_no']),
+                    trim($input['bank_name']),
+                    trim($input['bank_account_no']),
+                    trim($input['ifsc_code']),
+                    $input['m365'],
+                    isset($input['office_location_id']) ? intval($input['office_location_id']) : null,
+                    trim($input['old_emp_code']),
+                    $username,
+                    $module,
+                    $username
+                );
+
+                if (is_array($employee) && isset($employee['error'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => $employee['error']]);
+                    break;
+                }
+
+                http_response_code(200);
+                echo json_encode(['message' => 'Employee record updated successfully']);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => $e->getMessage()]);
+            }
+            break;
+        }
 }
