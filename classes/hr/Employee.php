@@ -6,6 +6,7 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/ExcelHelper.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/LookupCache.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/GraphAutoMailer.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/admin/Entity.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/admin/M365Admins.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php';
 
 use Dotenv\Dotenv;
@@ -85,6 +86,7 @@ use function PHPSTORM_META\type;
 //     ifsc_code VARCHAR(20) NOT NULL,
 //     m365 BOOLEAN NOT NULL,
 //     old_emp_code VARCHAR(20) NOT NULL,
+//     required_payslip BOOLEAN DEFAULT FALSE NOT NULL,
 //     createdBy INT NOT NULL,
 //     created_at DATETIME NOT NULL,
 //     updatedBy INT NOT NULL,
@@ -95,9 +97,11 @@ class Employee
 {
     private $conn;
     private $logger;
+    /** @var ExcelHelper */
     private $excelHelper;
     private $env;
     private $entityOb;
+    private $m365AdminsOb;
 
     private static $EMP_QUERY = "SELECT 
                                     emp.id as id,
@@ -130,7 +134,8 @@ class Employee
                                     cont.pin as pin,
                                     emp.aadhar as aadhar, emp.uan as uan, emp.pan_no as pan, emp.esi_no as esi, 
                                     emp.bank_name as bank_name, emp.bank_account_no as bank_account_no, 
-                                    emp.ifsc_code as ifsc_code
+                                    emp.ifsc_code as ifsc_code,
+                                    emp.required_payslip as required_payslip
                                     FROM tbl_employee emp
                                     LEFT JOIN tbl_contact cont ON emp.contact_id = cont.id
                                     JOIN tbl_entity ent on emp.entity_id = ent.id
@@ -150,6 +155,7 @@ class Employee
         $this->logger = new Logger($debugMode, $logDir);
         $this->excelHelper = new ExcelHelper($_SERVER['DOCUMENT_ROOT'] . '/excel-config/hr/employee.ini');
         $this->entityOb = new Entity();
+        $this->m365AdminsOb = new M365Admins();
 
         $this->env = getenv('APP_ENV') ?: 'local';
         if ($this->env === 'production') {
@@ -159,6 +165,109 @@ class Employee
             $dotenv = Dotenv::createImmutable(__DIR__ . "/../../", ".env");
         }
         $dotenv->load();
+    }
+
+    public function getExportQuery(): string
+    {
+        $query = "SELECT 
+                    ent.entity_name AS 'Entity',
+                    dept.name AS 'Department',
+                    desn.name AS 'Designation',
+
+                    cont.f_name AS 'First Name',
+                    cont.l_name AS 'Last Name',
+                    CONCAT(cont.f_name, ' ', cont.l_name) AS 'Display Name',
+
+                    cont.dob AS 'Date of Birth',
+                    cont.personal_email AS 'Personal Email',
+                    cont.mobile AS 'Mobile',
+
+                    CASE 
+                        WHEN cont.contacttype_id = 2 THEN 'Employee'
+                        ELSE 'Contract'
+                    END AS 'Employee Type',
+
+                    cont.join_date AS 'Joining Date',
+                    cont.exit_date AS 'Exit Date',
+
+                    emp.old_emp_code AS 'Old Employee Code',
+                    emp.emp_code AS 'Employee Code',
+
+                    CASE 
+                        WHEN emp.emp_status = 1 THEN 'Active'
+                        WHEN emp.emp_status = 2 THEN 'In-Active'
+                        WHEN emp.emp_status = 3 THEN 'Suspended'
+                        WHEN emp.emp_status = 4 THEN 'Blocked'
+                        ELSE 'Unknown'
+                    END AS 'Employee Status',
+
+                    CASE 
+                        WHEN emp.m365 = 1 THEN 'Yes'
+                        ELSE 'No'
+                    END AS 'M365',
+
+                    cont.email AS 'Email',
+
+                    CASE 
+                        WHEN cont.add1 IS NULL THEN '-'
+                        ELSE cont.add1
+                    END AS 'Address 1',
+
+                    CASE 
+                        WHEN cont.add2 IS NULL THEN '-'
+                        ELSE cont.add2
+                    END AS 'Address 2',
+
+                    country.country AS 'Country',
+                    state.state AS 'State',
+                    city.city AS 'City',
+
+                    office_location.name AS 'Office Location',
+
+                    cont.pin AS 'PIN',
+
+                    emp.aadhar AS 'Aadhar',
+                    emp.uan AS 'UAN',
+                    emp.pan_no AS 'PAN',
+                    emp.esi_no AS 'ESI Number',
+
+                    emp.bank_name AS 'Bank Name',
+                    emp.bank_account_no AS 'Bank Account Number',
+                    emp.ifsc_code AS 'IFSC Code',
+
+                    CASE 
+                        WHEN emp.required_payslip = 1 THEN 'Yes'
+                        ELSE 'No'
+                    END AS 'Required Payslip'
+
+                FROM tbl_employee emp
+
+                LEFT JOIN tbl_contact cont 
+                    ON emp.contact_id = cont.id
+
+                JOIN tbl_entity ent 
+                    ON emp.entity_id = ent.id
+
+                JOIN tbl_department dept 
+                    ON cont.department = dept.id
+
+                JOIN tbl_designation desn 
+                    ON cont.designation = desn.id
+
+                JOIN tbl_country country 
+                    ON cont.country = country.id
+
+                JOIN tbl_state state 
+                    ON cont.state = state.id
+
+                JOIN tbl_city city 
+                    ON cont.city = city.id
+
+                JOIN mas_office_location office_location 
+                ON emp.office_location_id = office_location.id";
+        
+        return $query;
+
     }
 
     private function normalizeEmployeeType($empType)
@@ -250,6 +359,25 @@ class Employee
         return $this->conn->runQuery($query, [$email]);
     }
 
+    // function to get only active employees
+    public function getPaginatedActiveEmployees($offset, $limit, $module, $username)
+    {
+        $limit = max(1, min(100, (int)$limit));
+        $offset = max(0, (int)$offset);
+
+        $query = self::$EMP_QUERY . " WHERE emp.emp_status = 1 ORDER BY emp.id ASC LIMIT $limit OFFSET $offset";
+        $this->logger->logQuery($query, [$limit, $offset], 'classes', $module, $username);
+        return $this->conn->runQuery($query, []);
+    }
+
+    public function getActiveEmployeesCount($module, $username)
+    {
+        $query = 'SELECT COUNT(*) AS total FROM tbl_employee WHERE emp_status = 1';
+        $this->logger->logQuery($query, [], 'classes', $module, $username);
+        $result = $this->conn->runQuery($query);
+        return $result[0]['total'] ?? 0;
+    }
+
 
 
     // function to add an employee
@@ -288,6 +416,7 @@ class Employee
         $bank_account_no,
         $ifsc_code,
         $m365,
+        $required_payslip,
         $old_emp_code,
         $module,
         $username
@@ -309,7 +438,7 @@ class Employee
             if (!$userModuleId) {
                 throw new Exception('User module not added as Base Employee');
             }
-            $employeeId = $this->insertEmployee($entityId, $contactId, $userId, $statusId, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username);
+            $employeeId = $this->insertEmployee($entityId, $contactId, $userId, $statusId, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $required_payslip, $old_emp_code, $userId, $module, $username);
             if (!$employeeId) {
                 throw new Exception('Employee not added');
             }
@@ -354,6 +483,7 @@ class Employee
         $bank_account_no,
         $ifsc_code,
         $m365,
+        $required_payslip,
         $officeLocationId,
         $old_emp_code,
         $userId,
@@ -365,6 +495,7 @@ class Employee
             $l_name = trim($l_name);
             $empType = $this->normalizeEmployeeType($empType);
             $m365 = $this->normalizeM365Flag($m365);
+            $required_payslip = $this->normalizeM365Flag($required_payslip);
             $exit_date = $this->normalizeExitDate($empType, $exit_date);
 
             if ($m365) {
@@ -436,6 +567,7 @@ class Employee
                 $ifsc_code,
                 $m365,
                 $officeLocationId,
+                $required_payslip,
                 $old_emp_code,
                 $userId,
                 $module,
@@ -447,33 +579,56 @@ class Employee
 
             $salutationName = $this->entityOb->getSalutationNameByEntityId($entityId, $module, $username);
             $empCode = $this->getEmployeeCodeById($employeeId, $module, $username);
+            $employeeDetails = $this->getEmployeeById($employeeId, $module, $username);
+            $employeeDetails = $employeeDetails[0] ?? null;
 
-            // send a mail to IT admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
+            // send a mail to M365 admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
             $mailer = new AutoMail();
-            $itAdminEmails = $this->getItAdminEmails('hr', 'system');
+            $m365AdminEmails = $this->getM365AdminEmails('hr', 'system');
             // $hrEmail = $this->getHrEmailByEntityId($entityId, $module, $username);
             if ($m365) {
+                $attachments = $employeeDetails ? [$this->excelHelper->generateEmployeeXlsx($employeeDetails)] : [];
                 $name = $salutationName ? $salutationName : 'Shrichandra Group Team';
+                // TODO: Need to send complete details such as employee ID, department, and designation to the M365 Admin
                 $keyValueData = [
-                    "Message" => "A new employee record has been added for $f_name $l_name. Please create an M365 account for this employee. Refer Admin Portal for more details.",
+                    "Message" => "A new employee record has been added for $f_name $l_name. 
+                                    Please create an M365 account for this employee. Please refer to the attached Excel file for details. ",
                     "Employee Name" => $f_name . ' ' . $l_name,
                     "Employee Email" => $email,
                     "Employee Code" => $empCode,
-                    // get it admin portal url from the env file
-                    "IT Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
+                    // get Admin Portal URL from the env file
+                    "Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
                 ];
                 try {
                     $mailer->sendInfoEmail(
                         subject: "New Employee Record Added - M365 Account Creation Required",
                         greetings: "Dear IT Admin,",
-                        name: $salutationName ? $salutationName : 'Shrichandra Group Team',
+                        name: $name,
                         keyValueArray: $keyValueData,
-                        to: $itAdminEmails,
+                        to: $m365AdminEmails,
                         cc: [], // add hr mail
-                        bcc: $itAdminEmails,
+                        bcc: $m365AdminEmails,
+                        attachments: $attachments
                     );
                 } catch (Exception $e) {
                     $this->logger->log('Failed to send email to IT Admin for M365 account creation: ' . $e->getMessage(), 'classes', $module);
+                    // delete the generated Excel attachment if email sending fails
+                    if (!empty($attachments)) {
+                        foreach ($attachments as $attachment) {
+                            if (file_exists($attachment)) {
+                                unlink($attachment);
+                            }
+                        }
+                    }
+                } finally {
+                    // delete the generated Excel attachment regardless of email sending success or failure
+                    if (!empty($attachments)) {
+                        foreach ($attachments as $attachment) {
+                            if (file_exists($attachment)) {
+                                unlink($attachment);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -514,6 +669,7 @@ class Employee
         $bank_name,
         $bank_account_no,
         $ifsc_code,
+        $required_payslip,
         $m365,
         $officeLocationId,
         $old_emp_code,
@@ -526,12 +682,14 @@ class Employee
         }
         try {
             $hadM365 = $this->employeeHasM365Enabled($employeeId, $module, $username);
+            $isActive = $this->employeeIsActive($employeeId, $module, $username);
             $contactId = $this->getContactIdForEmployee($employeeId, $module, $username);
             $userId = $this->getUserIdForEmployee($employeeId, $module, $username);
             $f_name = trim($f_name);
             $l_name = trim($l_name);
             $empType = $this->normalizeEmployeeType($empType);
             $m365 = $this->normalizeM365Flag($m365);
+            $required_payslip = $this->normalizeM365Flag($required_payslip);
             $exit_date = $this->normalizeExitDate($empType, $exit_date);
 
             // Only personal email can be updated, not m365 email. If m365 is enabled, personal email must be different from m365 email.
@@ -610,6 +768,7 @@ class Employee
                 $bank_account_no,
                 $ifsc_code,
                 $m365,
+                $required_payslip,
                 $officeLocationId,
                 $old_emp_code,
                 $userId,
@@ -621,21 +780,27 @@ class Employee
             }
             $salutationName = $this->entityOb->getSalutationNameByEntityId($entityId, $module, $username);
             $empCode = $this->getEmployeeCodeById($employeeId, $module, $username);
-            $itAdminEmails = $this->getItAdminEmails('hr', 'system');
+            $employeeDetails = $this->getEmployeeById($employeeId, $module, $username);
+            $employeeDetails = $employeeDetails[0] ?? null;
+            $m365AdminEmails = $this->getM365AdminEmails('hr', 'system');
 
             $mailer = new AutoMail();
-            // update m365 through graph api if m365 is Y, y, Yes, yes
-            if ($m365 && !$hadM365) {
+            // update m365 through graph api if m365 is Y, y, Yes, yes to add the user to the Azure directory
+            // only update the M365 access if the employee is active
+            if ($m365 && !$hadM365 && $isActive) {
+                $attachments = $employeeDetails ? [$this->excelHelper->generateEmployeeXlsx($employeeDetails)] : [];
                 // TODO: implement graph api call (function) to update m365 user
-                // send a mail to IT admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
+                // send a mail to M365 admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
+                // TODO: Need to send complete details such as employee ID, department, and designation to the M365 Admin
                 $name = $salutationName ? $salutationName : 'Shrichandra Group Team';
                 $keyValueData = [
-                    "Message" => "An employee record has been updated for $f_name $l_name. Please update the Azure directory for this employee. Refer Admin Portal for more details.",
+                    "Message" => "An employee record has been updated for $f_name $l_name. Access to M365 has been enabled for this employee. 
+                                    Please update the Azure directory for this employee. Please refer to the attached Excel file for details: ",
                     "Employee Name" => $f_name . ' ' . $l_name,
                     "Employee Email" => $email,
                     "Employee Code" => $empCode,
-                    // get it admin portal url from the env file
-                    "IT Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
+                    // get Admin Portal URL from the env file
+                    "Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
                 ];
                 try {
                     $mailer->sendInfoEmail(
@@ -643,12 +808,30 @@ class Employee
                         greetings: "Dear IT Admin,",
                         name: $name,
                         keyValueArray: $keyValueData,
-                        to: $itAdminEmails,
+                        to: $m365AdminEmails,
                         cc: [], // add hr mail
-                        bcc: $itAdminEmails,
+                        bcc: $m365AdminEmails,
+                        attachments: $attachments
                     );
                 } catch (Exception $e) {
                     $this->logger->log('Failed to send email to IT Admin: ' . $e->getMessage(), 'classes', $module);
+                    // delete the generated Excel attachment if email sending fails
+                    if (!empty($attachments)) {
+                        foreach ($attachments as $attachment) {
+                            if (file_exists($attachment)) {
+                                unlink($attachment);
+                            }
+                        }
+                    }
+                } finally {
+                    // delete the generated Excel attachment regardless of email sending success or failure
+                    if (!empty($attachments)) {
+                        foreach ($attachments as $attachment) {
+                            if (file_exists($attachment)) {
+                                unlink($attachment);
+                            }
+                        }
+                    }
                 }
             }
             return true;
@@ -656,6 +839,71 @@ class Employee
             $this->logger->log('Failed to add employee record: ' . $e->getMessage(), 'classes', $module);
             return ['exception' => 'Failed to add employee record:', 'error' => $e->getMessage()];
         }
+    }
+
+    // function to deactivate an employee
+    public function deactivateEmployee($employeeId, $module, $username)
+    {
+        // check whether the employee with the given employee id exists or not
+        $employeeDetails = $this->getEmployeeById($employeeId, $module, $username);
+        $employee = $employeeDetails[0] ?? null;
+        if (!$employee) {
+            return false;
+        }
+        // if exists, update the emp_status to 2 (In-Active)
+        $this->updateEmployeeStatus($employeeId, 2, $module, $username); // 2 indicates deactivated status (In-Active)
+
+        // update the status in tbl_contact
+        $this->updateContactStatus($employeeId, 2, $module, $username); // 2 indicates deactivated status (In-Active)
+
+        // update the status in tbl_users
+        $this->updateUserStatus($employeeId, 2, $module, $username); // 2 indicates deactivated status (In-Active)
+
+        // update the status in tbl_user_modules
+        $this->updateUserModulesStatus($employeeId, 2, $module, $username); // 2 indicates deactivated status (In-Active)
+
+        // update tbl_m365_admins if the employee is an M365 admin
+        if ($this->m365AdminsOb->isM365Admin($employeeId, $module, $username)) {
+            $this->m365AdminsOb->updateM365AdminStatus($employeeId, 2, $module, $username); // 2 indicates deactivated status (In-Active)
+        }
+
+        // send an email notification to M365 Admin about the deactivation (only if the employee had M365 access)
+        $entityId = $employee['entity_id'];
+        $hadM365 = $this->employeeHasM365Enabled($employeeId, $module, $username);
+        $salutationName = $this->entityOb->getSalutationNameByEntityId($entityId, $module, $username);
+        $empCode = $this->getEmployeeCodeById($employeeId, $module, $username);
+        $m365AdminEmails = $this->getM365AdminEmails('hr', 'system');
+
+        $mailer = new AutoMail();
+        // update m365 through graph api if m365 is Y, y, Yes, yes
+        if ($hadM365) {
+            // TODO: implement graph api call (function) to update m365 user
+            // send a mail to M365 admin with cc to the hr to create the M365 account for the employee if m365 is Y, y, Yes, yes
+            $name = $salutationName ? $salutationName : 'Shrichandra Group Team';
+            $keyValueData = [
+                "Message" => "An employee record has been deactivated for " . $employee['first_name'] . ' ' . $employee['last_name'] . ". 
+                                Please update (deactivate) the Azure directory for this employee. The details are as follows: ",
+                "Employee Name" => $employee['first_name'] . ' ' . $employee['last_name'],
+                "Employee Email" => $employee['email'],
+                "Employee Code" => $empCode,
+                // get Admin Portal URL from the env file
+                "Admin Portal URL" => $_ENV['ADMIN_PORTAL_URL'] ?? 'Not Set in Env'
+            ];
+            try {
+                $mailer->sendInfoEmail(
+                    subject: "Employee M365 Access Deactivated - Azure Directory Update Required",
+                    greetings: "Dear IT Admin,",
+                    name: $name,
+                    keyValueArray: $keyValueData,
+                    to: $m365AdminEmails,
+                    cc: [], // add hr mail
+                    bcc: $m365AdminEmails,
+                );
+            } catch (Exception $e) {
+                $this->logger->log('Failed to send email to IT Admin: ' . $e->getMessage(), 'classes', $module);
+            }
+        }
+        return true;
     }
 
     // TODO: add office location column
@@ -783,11 +1031,17 @@ class Employee
                 throw new Exception('Invalid value for m365: ' . $row['m365']);
             }
 
+            if (!isset($row['required_payslip']) || !in_array(strtolower(trim((string) $row['required_payslip'])), ['y', 'yes', 'n', 'no'], true)) {
+                throw new Exception('Invalid value for required_payslip: ' . ($row['required_payslip'] ?? ''));
+            }
+
             if (strtolower(trim($row['m365'])) === 'y' || strtolower(trim($row['m365'])) === 'yes') {
                 $m365 = true;
             } else {
                 $m365 = false;
             }
+
+            $required_payslip = $this->normalizeM365Flag($row['required_payslip']);
 
 
             if ($m365) {
@@ -832,6 +1086,7 @@ class Employee
             // if (!$entityId) {
             //     throw new Exception('Entity not found: ' . $row['entity_code']);
             // }
+
             $entityId = intval($row['entity_id']);
             $departmentId = intval($row['department']);
             $designationId = intval($row['designation']);
@@ -848,7 +1103,6 @@ class Employee
             $row['add2'] = $row['add2'] ?? null;
             $row['personal_email'] = $row['personal_email'] ?? $row['email'] ? $row['email'] : null;
             $officeLocationId = intval($row['office_location_id'] ?? 0);
-
             // insert the data using the addEmployeeRecordForExcelImport function
             $this->addEmployeeRecordForExcelImport(
                 trim($row['f_name']),
@@ -880,6 +1134,7 @@ class Employee
                 trim($row['bank_account_no']),
                 trim($row['ifsc_code']),
                 $m365,
+                $required_payslip,
                 trim($row['old_emp_code']),
                 $module,
                 $username
@@ -1018,10 +1273,11 @@ class Employee
 
 
 
-    public function insertEmployee($entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username)
+    public function insertEmployee($entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $required_payslip, $old_emp_code, $userId, $module, $username)
     {
 
         $m365 = ($m365 === true || $m365 === 1 || in_array(strtolower(trim((string)$m365)), ['y', 'yes', '1', 'true'], true)) ? 1 : 0;
+        $required_payslip = $this->normalizeM365Flag($required_payslip) ? 1 : 0;
         $officeLocationId = $officeLocationId ?: 1; // default to 1 if not provided
         // if the employee does not exist, add it
         $emp_code = $this->generateEmployeeCode($entity_id, $module, $username);
@@ -1029,15 +1285,15 @@ class Employee
             contact_id, user_id, emp_status, 
             uan, aadhar, pan_no, esi_no, bank_name, 
             bank_account_no, ifsc_code, 
-            m365, office_location_id, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'classes', $module, $username);
-        $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId], 'Employee added');
+            m365, office_location_id, required_payslip, old_emp_code, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $this->logger->logQuery($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $required_payslip, $old_emp_code, $userId], 'classes', $module, $username);
+        $employeeId = $this->conn->insert($query, [$emp_code, $entity_id, $contact_id, $user_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $required_payslip, $old_emp_code, $userId], 'Employee added');
         return $employeeId;
     }
 
 
 
-    public function updateEmployee($employeeId, $entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $module, $username)
+    public function updateEmployee($employeeId, $entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $required_payslip, $officeLocationId, $old_emp_code, $userId, $module, $username)
     {
         try {
             // Check if the employee exists
@@ -1047,12 +1303,17 @@ class Employee
 
             // Normalize m365 value
             $m365 = ($m365 === true || $m365 === 1 || in_array(strtolower(trim((string)$m365)), ['y', 'yes', '1', 'true'], true)) ? 1 : 0;
+            $required_payslip = $this->normalizeM365Flag($required_payslip) ? 1 : 0;
             $officeLocationId = $officeLocationId ?: 1; // default to 1 if not provided
 
             // Update the employee record
-            $query = 'UPDATE tbl_employee SET entity_id = ?, emp_status = ?, uan = ?, aadhar = ?, pan_no = ?, esi_no = ?, bank_name = ?, bank_account_no = ?, ifsc_code = ?, m365 = ?, office_location_id = ?, old_emp_code = ?, updatedBy = ? WHERE id = ?';
-            $this->logger->logQuery($query, [$entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $employeeId], 'classes', $module, $username);
-            $this->conn->update($query, [$entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $officeLocationId, $old_emp_code, $userId, $employeeId], 'Employee updated');
+            $query = 'UPDATE tbl_employee SET entity_id = ?, emp_status = ?, uan = ?, 
+                        aadhar = ?, pan_no = ?, esi_no = ?, bank_name = ?, 
+                        bank_account_no = ?, ifsc_code = ?, m365 = ?, required_payslip = ?, 
+                        office_location_id = ?, old_emp_code = ?, 
+                        updatedBy = ? WHERE id = ?';
+            $this->logger->logQuery($query, [$entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $required_payslip, $officeLocationId, $old_emp_code, $userId, $employeeId], 'classes', $module, $username);
+            $this->conn->update($query, [$entity_id, $emp_status, $uan, $aadhar, $pan_no, $esi_no, $bank_name, $bank_account_no, $ifsc_code, $m365, $required_payslip, $officeLocationId, $old_emp_code, $userId, $employeeId], 'Employee updated');
             return true;
         } catch (Exception $e) {
             throw new Exception('Failed to update employee: ' . $e->getMessage());
@@ -1166,9 +1427,12 @@ class Employee
         return null;
     }
 
-    public function getItAdminEmails($module, $username)
+    public function getM365AdminEmails($module, $username)
     {
-        $query = 'SELECT email FROM tbl_user_modules WHERE user_role_id = 2 AND module_id = 1';
+        $query = 'SELECT user.email FROM tbl_m365_admins mad JOIN tbl_employee emp 
+                    ON emp.id = mad.employee_id
+                    JOIN tbl_users user ON emp.user_id=user.id 
+                    WHERE mad.status = 1';
         $this->logger->logQuery($query, [], 'classes', $module, $username);
         $result = $this->conn->runQuery($query);
         if ($result) {
@@ -1321,10 +1585,64 @@ class Employee
         return $result['contact_id'] ?? null;
     }
 
+    public function updateEmployeeStatus($employeeId, $statusId, $module, $username)
+    {
+        $query = 'UPDATE tbl_employee SET emp_status = ?, updatedBy = ? WHERE id = ?';
+        $params = [$statusId, $username, $employeeId];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        return $this->conn->update($query, $params, 'Employee status updated');
+    }
 
+    public function updateContactStatus($employeeId, $statusId, $module, $username)
+    {
+        $query = 'UPDATE tbl_contact cont
+                    JOIN tbl_employee emp ON emp.contact_id = cont.id
+                    SET cont.emp_status = ?, cont.last_updated = ?
+                    WHERE emp.id = ?';
+        $params = [$statusId, $username, $employeeId];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        return $this->conn->update($query, $params, 'Contact status updated');
+    }
 
+    public function updateUserStatus($employeeId, $statusId, $module, $username)
+    {
+        $query = 'UPDATE tbl_users usr
+                    JOIN tbl_employee emp ON emp.user_id = usr.id
+                    SET usr.user_status = ?, usr.last_updatedBy = ?
+                    WHERE emp.id = ?';
+        $params = [$statusId, $username, $employeeId];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        return $this->conn->update($query, $params, 'User status updated');
+    }
 
+    public function updateUserModulesStatus($employeeId, $statusId, $module, $username)
+    {
+        $enabled = (int) $statusId === 1 ? 1 : 0;
+        $query = 'UPDATE tbl_user_modules user_modules
+                    JOIN tbl_employee emp ON emp.user_id = user_modules.user_id
+                    SET user_modules.enabled = ?, user_modules.last_updated = ?
+                    WHERE emp.id = ?';
+        $params = [$enabled, $username, $employeeId];
+        $this->logger->logQuery($query, $params, 'classes', $module, $username);
+        return $this->conn->update($query, $params, 'User module status updated');
+    }
 
+    public function employeeIsActive($employeeId, $module, $username)
+    {
+        $query = 'SELECT emp_status FROM tbl_employee WHERE id = ?';
+        $this->logger->logQuery($query, [$employeeId], 'classes', $module, $username);
+        $result = $this->conn->runSingle($query, [$employeeId]);
+        // if emp_status = 1 return true else false
+        if (isset($result['emp_status']) && $result['emp_status'] === 1) {
+            return true;
+        }
+        return false;
+    }
+
+    public function normalizeBoolean($value)
+    {
+        return in_array(strtolower(trim((string) $value)), ['y', 'yes', '1', 'true'], true);
+    }
 
     public function updateM365() {}
 }

@@ -188,6 +188,66 @@ class ExcelHelper
         return $this->tableName;
     }
 
+    public function generateEmployeeXlsx(array $employee): string
+    {
+        $firstName = trim((string) ($employee['first_name'] ?? $employee['f_name'] ?? ''));
+        $lastName = trim((string) ($employee['last_name'] ?? $employee['l_name'] ?? ''));
+        $employeeName = trim($firstName . ' ' . $lastName);
+        $employeeName = $employeeName !== '' ? $employeeName : 'employee';
+        $safeFileName = preg_replace('/[^A-Za-z0-9_-]+/', '_', $employeeName);
+        $exportDirectory = $_SERVER['DOCUMENT_ROOT'] . '/uploads/m365-employee-details';
+
+        if (!is_dir($exportDirectory) && !mkdir($exportDirectory, 0775, true) && !is_dir($exportDirectory)) {
+            throw new Exception('Unable to create the M365 employee export directory.');
+        }
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Employee Details');
+
+        $details = [
+            'Employee ID' => $employee['id'] ?? $employee['employee_id'] ?? '',
+            'Employee Code' => $employee['emp_code'] ?? '',
+            'First Name' => $firstName,
+            'Last Name' => $lastName,
+            'Display Name' => $employee['display_name'] ?? $employeeName,
+            'Email' => $employee['email'] ?? '',
+            'Personal Email' => $employee['personal_email'] ?? '',
+            'Mobile' => $employee['mobile'] ?? '',
+            'Department' => $employee['department'] ?? '',
+            'Designation' => $employee['designation'] ?? '',
+            'Entity' => $employee['entity_name'] ?? '',
+            'Office Location' => $employee['office_location'] ?? '',
+            'Joining Date' => $employee['joining_date'] ?? '',
+            'Employee Type' => $employee['emp_type'] ?? '',
+            'Address Line 1' => $employee['add1'] ?? '',
+            'Address Line 2' => $employee['add2'] ?? '',
+            'City' => $employee['city'] ?? '',
+            'State' => $employee['state'] ?? '',
+            'Country' => $employee['country'] ?? '',
+            'PIN Code' => $employee['pin'] ?? '',
+        ];
+
+        $sheet->fromArray(['Field', 'Value'], null, 'A1');
+        $row = 2;
+        foreach ($details as $field => $value) {
+            $sheet->setCellValue("A$row", $field);
+            $sheet->setCellValue("B$row", $value);
+            $row++;
+        }
+
+        $sheet->getStyle('A1:B1')->getFont()->setBold(true);
+        $sheet->getColumnDimension('A')->setAutoSize(true);
+        $sheet->getColumnDimension('B')->setAutoSize(true);
+
+        $filePath = $exportDirectory . '/' . $safeFileName . '.xlsx';
+        $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+        $writer->save($filePath);
+        $spreadsheet->disconnectWorksheets();
+
+        return $filePath;
+    }
+
     private function parseDateValue($value): ?string
     {
         if ($value instanceof \DateTimeInterface) {

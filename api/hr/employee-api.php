@@ -10,6 +10,7 @@ require_once __DIR__ . '../../../classes/Logger.php';
 require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
 require_once __DIR__ . '../../../classes/utils/ExcelHelper.php';
 require_once __DIR__ . '../../../classes/utils/ExcelTemplateHelper.php';
+require_once __DIR__ . '../../../classes/utils/ExportExcelHelper.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php';
 
 
@@ -30,6 +31,7 @@ $regExp = '/^[a-zA-Z0-9\s]+$/';
 $employeeOb = new Employee();
 $employeeConfigFilePath = $_SERVER['DOCUMENT_ROOT'] . '/excel-config/hr/employee.ini';
 $excelHelper = new ExcelHelper($employeeConfigFilePath);
+$exportExcelHelper = new ExportExcelHelper('Employees-' . date('Y-m-d'));
 $excelTemplateHelper = new ExcelTemplateHelper($employeeConfigFilePath);
 $auth = new UserLogin();
 $username = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 'Guest user';
@@ -43,6 +45,19 @@ switch ($method) {
                 $excelTemplateHelper->generateTemplate();
                 http_response_code(200);
                 echo json_encode(["message" => "Template generated successfully."]);
+                break;
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["error" => $e->getMessage()]);
+        }
+
+        try {
+            if (isset($_GET['export-employees']) && $_GET['export-employees'] == 'true') {
+                $exportQuery = $employeeOb->getExportQuery();
+                $exportExcelHelper->generateExport($exportQuery);
+                http_response_code(200);
+                echo json_encode(["message" => "Employees exported successfully."]);
                 break;
             }
         } catch (Exception $e) {
@@ -80,6 +95,25 @@ switch ($method) {
             break;
         }
 
+        // get only active employees
+        if (isset($_GET['status']) && $_GET['status'] == 'active') {
+            
+            $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+            $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
+            $offset = ($page - 1) * $limit;
+            $employees = $employeeOb->getPaginatedActiveEmployees($offset, $limit, $module, $username);
+            $total = $employeeOb->getActiveEmployeesCount($module, $username);
+            $response = [
+                'total' => $total,
+                'page' => $page,
+                'limit' => $limit,
+                'employees' => $employees,
+            ];
+            http_response_code(200);
+            echo json_encode($response);
+            break;
+        }
+
         // paginated employees response
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
@@ -98,6 +132,47 @@ switch ($method) {
 
     case 'POST':
         $logger->log("POST request received");
+
+        if (isset($_GET['action']) && strtolower(trim($_GET['action'])) === 'deactivate') {
+            if (!isset($_GET['id']) || !is_numeric($_GET['id']) || (int) $_GET['id'] <= 0) {
+                http_response_code(400);
+                $response = ['error' => 'A valid employee ID is required for deactivation'];
+                echo json_encode($response);
+                $logger->logRequestAndResponse($_GET, $response);
+                break;
+            }
+
+            try {
+                $employeeId = (int) $_GET['id'];
+                // check if the employee has active status before deactivating
+                $employee = $employeeOb->getEmployeeById($employeeId, $module, $username);
+                if (!$employee || strtolower($employee[0]['emp_status']) !== 'active') {
+                    http_response_code(400);
+                    $response = ['error' => 'Employee is not active or does not exist'];
+                    echo json_encode($response);
+                    $logger->logRequestAndResponse($_GET, $response);
+                    break;
+                }
+
+                $result = $employeeOb->deactivateEmployee($employeeId, $module, $username);
+                if ($result) {
+                    http_response_code(200);
+                    $response = ['message' => 'Employee deactivated successfully'];
+                } else {
+                    http_response_code(404);
+                    $response = ['error' => 'Employee not found'];
+                }
+            } catch (Exception $e) {
+                http_response_code(500);
+                $response = ['error' => 'Failed to deactivate employee' . $e->getMessage()];
+                $logger->log('Failed to deactivate employee: ' . $e->getMessage());
+            }
+
+            echo json_encode($response);
+            $logger->logRequestAndResponse($_GET, $response);
+            break;
+        }
+
         // file upload for employee import
         if (isset($_FILES['file'])) {
             try {
@@ -127,7 +202,7 @@ switch ($method) {
             isset($input['emp_status']) && isset($input['entity_id']) && isset($input['department_id']) &&
             isset($input['designation_id']) && array_key_exists('image', $input) && isset($input['uan']) && isset($input['aadhar']) &&
             isset($input['pan_no']) && isset($input['esi_no']) && isset($input['bank_name']) && isset($input['bank_account_no']) &&
-            isset($input['ifsc_code']) && isset($input['m365']) && isset($input['old_emp_code'])
+            isset($input['ifsc_code']) && isset($input['m365']) && isset($input['required_payslip']) && isset($input['old_emp_code'])
         ) {
             $f_name = trim($input['f_name']);
             $l_name = trim($input['l_name']);
@@ -158,6 +233,7 @@ switch ($method) {
             $bank_account_no = trim($input['bank_account_no']);
             $ifsc_code = trim($input['ifsc_code']);
             $m365 = trim($input['m365']);
+            $required_payslip = $input['required_payslip'];
             $old_emp_code = trim($input['old_emp_code']);
             // $module = trim($input['module']);
             // $username = trim($input['username']);
@@ -241,6 +317,7 @@ switch ($method) {
                 $bank_account_no,
                 $ifsc_code,
                 $m365,
+                $required_payslip,
                 $officeLocationId,
                 $old_emp_code,
                 $username,
@@ -274,7 +351,7 @@ switch ($method) {
             isset($input['city'], $input['state'], $input['country'], $input['personal_email'], $input['join_date'], $input['emp_type']) &&
             isset($input['emp_status'], $input['entity_id'], $input['department_id'], $input['designation_id'], $input['uan']) &&
             isset($input['aadhar'], $input['pan_no'], $input['esi_no'], $input['bank_name'], $input['bank_account_no']) &&
-            isset($input['ifsc_code'], $input['m365'], $input['old_emp_code']) &&
+            isset($input['ifsc_code'], $input['m365'], $input['required_payslip'], $input['old_emp_code']) &&
             array_key_exists('pin', $input) && array_key_exists('add1', $input) && array_key_exists('add2', $input) && array_key_exists('image', $input)
         ) {
             try {
@@ -307,6 +384,7 @@ switch ($method) {
                     trim($input['bank_name']),
                     trim($input['bank_account_no']),
                     trim($input['ifsc_code']),
+                    $input['required_payslip'],
                     $input['m365'],
                     isset($input['office_location_id']) ? intval($input['office_location_id']) : null,
                     trim($input['old_emp_code']),

@@ -36,3 +36,7 @@ excel-files/*.xlsx
 excel-files/*.ps1
 
 *.sql
+
+# Avoid design documentation
+design/
+*.txt

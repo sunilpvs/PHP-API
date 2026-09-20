@@ -1,182 +1,192 @@
 <?php
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    http_response_code(200);
-    exit;
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+	http_response_code(200);
+	exit;
 }
 
-require_once __DIR__ . '../../../classes/hr/Salaries.php';
-require_once __DIR__ . '../../../classes/authentication/middle.php';
-require_once __DIR__ . '../../../classes/Logger.php';
-require_once __DIR__ . '../../../classes/authentication/LoginUser.php';
-require_once __DIR__ . '../../../classes/utils/ExcelHelper.php';
-require_once __DIR__ . '../../../classes/utils/ExcelTemplateHelper.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/hr/Salaries.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/authentication/middle.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/Logger.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/authentication/LoginUser.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/ExcelHelper.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/classes/utils/ExcelTemplateHelper.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php';
-
-
 
 authenticateJWT();
 
 $config = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . '/app.ini', true);
-$debugMode = isset($config['generic']['DEBUG_MODE']) && in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
+$debugMode = isset($config['generic']['DEBUG_MODE'])
+	&& in_array(strtolower($config['generic']['DEBUG_MODE']), ['1', 'true'], true);
 $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
 $logger = new Logger($debugMode, $logDir);
-
 
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 $input = is_array($input) ? $input : [];
-$regExp = '/^[a-zA-Z0-9\s]+$/';
 
 $salaryOb = new Salaries();
-$salaryConfigFilePath = __DIR__ . '../../../excel-config/hr/salaries.ini';
-$incrementsConfigFilePath = __DIR__ . '../../../excel-config/hr/increments.ini';
+$salaryConfigFilePath = $_SERVER['DOCUMENT_ROOT'] . '/excel-config/hr/salaries.ini';
+$incrementConfigFilePath = $_SERVER['DOCUMENT_ROOT'] . '/excel-config/hr/increments.ini';
 $salaryExcelHelper = new ExcelHelper($salaryConfigFilePath);
-$salaryExcelTemplateHelper = new ExcelTemplateHelper($salaryConfigFilePath);
-$incrementsTemplateHelper = new ExcelTemplateHelper($incrementsConfigFilePath);
-$incrementsExcelHelper = new ExcelHelper($incrementsConfigFilePath);
+$incrementExcelHelper = new ExcelHelper($incrementConfigFilePath);
+$salaryTemplateHelper = new ExcelTemplateHelper($salaryConfigFilePath);
+$incrementTemplateHelper = new ExcelTemplateHelper($incrementConfigFilePath);
+
 $auth = new UserLogin();
-$username = $auth->getUserIdFromJWT() ? $auth->getUserIdFromJWT() : 'Guest user';
+$username = $auth->getUserIdFromJWT() ?: 'guest';
 $module = 'Human Resource Management';
 
+function salaryApiRespond($statusCode, array $response, $request, $logger): void
+{
+	http_response_code($statusCode);
+	echo json_encode($response);
+	$logger->logRequestAndResponse($request, $response);
+}
+
 switch ($method) {
-    case 'GET':
-        $logger->log("GET request received");
-        try {
-            if (isset($_GET['download-salary-template']) && $_GET['download-salary-template'] == 'true') {
-                $salaryExcelTemplateHelper->generateTemplate();
-                http_response_code(200);
-                echo json_encode(["message" => "Salary template generated successfully."]);
-                break;
-            }
-            if (isset($_GET['download-increments-template']) && $_GET['download-increments-template'] == 'true') {
-                $incrementsTemplateHelper->generateTemplate();
-                http_response_code(200);
-                echo json_encode(["message" => "Increments template generated successfully."]);
-                break;
-            }
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(["error" => $e->getMessage()]);
-        }
-        // get salary with id 
-        if (isset($_GET['id'])) {
-            $id = $_GET['id'];
-            $salary = $salaryOb->getSalaryById($id, $module, $username);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        } 
+	case 'GET':
+		$logger->log('GET request received');
 
-         // get latest salary by old employee code
-         if (isset($_GET['old_emp_code']) && isset($_GET['latest']) && $_GET['latest'] == 'true') {
-            $old_emp_code = $_GET['old_emp_code'];
-            $salary = $salaryOb->getLatestSalaryByOldEmployeeCode($old_emp_code);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
+		try {
+			if (isset($_GET['download-salary-template']) && $_GET['download-salary-template'] === 'true') {
+				$salaryTemplateHelper->generateTemplate();
+				salaryApiRespond(200, ['message' => 'Salary template generated successfully.'], $_GET, $logger);
+				break;
+			}
 
-        // get latest salary by employee code
-        if (isset($_GET['emp_code']) && isset($_GET['latest']) && $_GET['latest'] == 'true') {
-            $emp_code = $_GET['emp_code'];
-            $salary = $salaryOb->getLatestSalaryByEmployeeCode($emp_code);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
-        
-        // get salary by old employee code
-        if (isset($_GET['old_emp_code'])) {
-            $old_emp_code = $_GET['old_emp_code'];
-            $salary = $salaryOb->getSalaryByOldEmployeeCode($old_emp_code, $module, $username);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
+			if (isset($_GET['download-increments-template']) && $_GET['download-increments-template'] === 'true') {
+				$incrementTemplateHelper->generateTemplate();
+				salaryApiRespond(200, ['message' => 'Increment template generated successfully.'], $_GET, $logger);
+				break;
+			}
 
-        // get salary by employee code
-        if (isset($_GET['employee_code'])) {
-            $employee_code = $_GET['employee_code'];
-            $salary = $salaryOb->getSalaryByEmployeeCode($employee_code, $module, $username);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
+			if (isset($_GET['employee_id'])) {
+				if (!is_numeric($_GET['employee_id']) || (int) $_GET['employee_id'] <= 0) {
+					salaryApiRespond(400, ['error' => 'Employee ID must be a valid positive number.'], $_GET, $logger);
+					break;
+				}
 
-        // get salary by effective from and effective to
-        if (isset($_GET['from']) && isset($_GET['to'])) {
-            $effective_from = $_GET['from'];
-            $effective_to = $_GET['to'];
-            $salary = $salaryOb->getSalaryByEffectiveFromAndEffectiveTo($effective_from, $effective_to, $module, $username);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
+				$employeeId = (int) $_GET['employee_id'];
+				if (isset($_GET['active']) && strtolower((string) $_GET['active']) === 'true') {
+					$salary = $salaryOb->getActiveSalaryByEmployeeId($employeeId, $module, $username);
+					salaryApiRespond($salary ? 200 : 404, $salary ?: ['error' => 'Active salary not found.'], $_GET, $logger);
+					break;
+				}
 
-        // get current effective from date
-        if (isset($_GET['current_effective_from'])) {
-            $current_effective_from = $_GET['current_effective_from'];
-            $salary = $salaryOb->getCurrentEffectiveFromDate($current_effective_from, $module, $username);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
+				$salaries = $salaryOb->getSalariesByEmployeeId($employeeId, $module, $username);
+				salaryApiRespond(200, ['salaries' => $salaries], $_GET, $logger);
+				break;
+			}
 
-        // get latest salary by employee id
-        if (isset($_GET['employee_id'])) {
-            $employee_id = $_GET['employee_id'];
-            $salary = $salaryOb->getLatestSalaryByEmployeeId($employee_id, $module, $username);
-            http_response_code(200);
-            echo json_encode(['salary' => $salary]);
-            break;
-        }
+			$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+			$limit = isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 10;
+			$offset = ($page - 1) * $limit;
+			$salaries = $salaryOb->getPaginatedSalaries($offset, $limit, $module, $username);
 
-        // paginated employees response
-        $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
-        $limit = isset($_GET['limit']) ? max(1, intval($_GET['limit'])) : 10;
-        $offset = ($page - 1) * $limit;
-        $salaries = $salaryOb->getPaginatedSalaries($offset, $limit, $module, $username);
-        $total = $salaryOb->getSalariesCount($module, $username);
-        $response = [
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-            'salaries' => $salaries,
-        ];
-        http_response_code(200);
-        echo json_encode($response);
-        break;
+			// The model's count method is employee-scoped, so count active rows here for pagination.
+			$activeSalaries = $salaryOb->getAllSalaries($module, $username);
+			$activeCount = count(array_filter($activeSalaries, static function ($salary) {
+				return isset($salary['status_id']) && (int) $salary['status_id'] === 1;
+			}));
 
-    case 'POST':
-        $logger->log("POST request received");
-        // file upload for salary import
-        if (isset($_POST['import-type']) && $_POST['import-type'] == 'salaries') {
-            try {
-                $file = $_FILES['file'];
-                $salaryExcelHelper->createTemporaryTable();
-                $batchId = $salaryExcelHelper->importExcelToTemporaryTable($file);
-                $errorReport = $salaryOb->importSalariesFromExcel($batchId, $module, $username);
-                $salaryExcelHelper->cleanTemporaryTable($batchId);
-                http_response_code(200);
-                echo json_encode(["message" => "Data imported and inserted successfully.", "errors" => $errorReport]);
-            } catch (Exception $e) {
-                http_response_code(500);
-                echo json_encode(["error" => $e->getMessage()]);
-            }
-        }
-        if (isset($_POST['import-type']) && $_POST['import-type'] == 'increments') {
-            try {
-                $file = $_FILES['file'];
-                $incrementsExcelHelper->createTemporaryTable();
-                $batchId = $incrementsExcelHelper->importExcelToTemporaryTable($file);
-                $errorReport = $salaryOb->importIncrementsFromExcel($batchId, $module, $username);
-                $incrementsExcelHelper->cleanTemporaryTable($batchId);
-                http_response_code(200);
-                echo json_encode(["message" => "Data imported and inserted successfully.", "errors" => $errorReport]);
-            } catch (Exception $e) {
-                http_response_code(500);
-                echo json_encode(["error" => $e->getMessage()]);
-            }
-        }
+			salaryApiRespond(200, [
+				'total' => $activeCount,
+				'page' => $page,
+				'limit' => min(100, $limit),
+				'salaries' => $salaries,
+			], $_GET, $logger);
+		} catch (Exception $exception) {
+			salaryApiRespond(500, ['error' => $exception->getMessage()], $_GET, $logger);
+		}
+		break;
 
+	case 'POST':
+		$logger->log('POST request received');
+
+		if (isset($_POST['import-type']) || isset($_FILES['file'])) {
+			$importType = strtolower(trim((string) ($_POST['import-type'] ?? '')));
+			if (!isset($_FILES['file']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
+				salaryApiRespond(400, ['error' => 'A valid Excel file is required.'], $_POST, $logger);
+				break;
+			}
+
+			try {
+				$file = $_FILES['file'];
+				if ($importType === 'salaries') {
+					$salaryExcelHelper->createTemporaryTable();
+					$batchId = $salaryExcelHelper->importExcelToTemporaryTable($file);
+					try {
+						$errorReport = $salaryOb->importSalariesFromExcel($batchId, $module, $username);
+					} finally {
+						$salaryExcelHelper->cleanTemporaryTable($batchId);
+					}
+				} elseif ($importType === 'increments') {
+					$incrementExcelHelper->createTemporaryTable();
+					$batchId = $incrementExcelHelper->importExcelToTemporaryTable($file);
+					try {
+						$errorReport = $salaryOb->importIncrementsFromExcel($batchId, $module, $username);
+					} finally {
+						$incrementExcelHelper->cleanTemporaryTable($batchId);
+					}
+				} else {
+					salaryApiRespond(400, ['error' => 'Import type must be salaries or increments.'], $_POST, $logger);
+					break;
+				}
+
+				salaryApiRespond(200, [
+					'message' => 'Salary data imported successfully.',
+					'errors' => $errorReport,
+				], $_POST, $logger);
+			} catch (Exception $exception) {
+				salaryApiRespond(500, ['error' => $exception->getMessage()], $_POST, $logger);
+			}
+			break;
+		}
+
+		$requiredFields = ['employee_id', 'gross', 'effective_from', 'revision_type'];
+		foreach ($requiredFields as $field) {
+			if (!array_key_exists($field, $input) || $input[$field] === '' || $input[$field] === null) {
+				salaryApiRespond(400, ['error' => $field . ' is required.'], $input, $logger);
+				break 2;
+			}
+		}
+
+		if (!isset($input['status']) || !in_array((string) $input['status'], ['1', '2'], true)) {
+			salaryApiRespond(400, ['error' => 'Status must be either 1 (Active) or 2 (In-Active).'], $input, $logger);
+			break;
+		}
+
+		try {
+			$result = $salaryOb->addSalaryRecord(
+				(int) $input['employee_id'],
+				$input['gross'],
+				$input['increment'] ?? null,
+				$input['effective_from'],
+				$input['revision_type'],
+				$input['notes'] ?? null,
+				$username,
+				$module,
+				$username,
+				(int) $input['status']
+			);
+			salaryApiRespond(201, $result, $input, $logger);
+		} catch (InvalidArgumentException $exception) {
+			salaryApiRespond(400, ['error' => $exception->getMessage()], $input, $logger);
+		} catch (Exception $exception) {
+			salaryApiRespond(500, ['error' => $exception->getMessage()], $input, $logger);
+		}
+		break;
+
+	case 'PUT':
+		salaryApiRespond(405, ['error' => 'PUT is not supported. Salary changes must be added as a new revision.'], $input, $logger);
+		break;
+
+	case 'DELETE':
+		salaryApiRespond(405, ['error' => 'DELETE is not supported for salary history.'], $_GET, $logger);
+		break;
+
+	default:
+		salaryApiRespond(405, ['error' => 'Method not allowed.'], ['method' => $method], $logger);
+		break;
 }
