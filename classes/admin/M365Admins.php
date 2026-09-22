@@ -1,5 +1,3 @@
-
-
 <?php
 
 /* CREATE TABLE tbl_m365_admins ( - tbl_notification

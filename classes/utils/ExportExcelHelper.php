@@ -22,8 +22,13 @@ class ExportExcelHelper
 
 	public function generateExport($query): void
 	{
+		// Buffer our own output; some production php.ini configs have output_buffering off,
+		// so any stray warning/notice would flush before header() and break the download.
+		ob_start();
+
 		$rows = $this->conn->runQuery($query, $this->params);
 		if (empty($rows)) {
+			ob_end_clean();
 			throw new Exception('No data available to export.');
 		}
 
@@ -41,8 +46,13 @@ class ExportExcelHelper
 			$sheet->getColumnDimension($column)->setAutoSize(true);
 		}
 
+		// discard any buffered warnings/notices along with the buffer we opened above
 		while (ob_get_level() > 0) {
 			ob_end_clean();
+		}
+
+		if (headers_sent($file, $line)) {
+			throw new Exception("Cannot export: output already started at $file:$line");
 		}
 
 		header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

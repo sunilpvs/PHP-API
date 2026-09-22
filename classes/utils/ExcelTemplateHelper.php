@@ -40,6 +40,10 @@ class ExcelTemplateHelper
     // function to generate an excel file with the columns
     public function generateTemplate()
     {
+        // Buffer our own output; some production php.ini configs have output_buffering off,
+        // so any stray warning/notice would flush before header() and break the download.
+        ob_start();
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle($this->sheetName);
@@ -182,6 +186,15 @@ class ExcelTemplateHelper
         }
 
         // Download
+        // discard any buffered warnings/notices so they can't corrupt the binary output or headers
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        if (headers_sent($file, $line)) {
+            throw new Exception("Cannot export template: output already started at $file:$line");
+        }
+
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
         header('Content-Disposition: attachment;filename="' . $this->templateFileName . '"');
